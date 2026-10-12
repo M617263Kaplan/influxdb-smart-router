@@ -1,0 +1,26 @@
+
+# ISR SOURCE MUST NEVER BE COMMITTED HERE.
+# This repository is docs + release binaries only; the Rust tree is local-only
+# and lives in ../ISR. A stale copy of it was found sitting untracked in this
+# working directory (never committed), which one `git add -A` would have
+# published. These entries make that impossible rather than relying on care.
+/src/
+/tests/
+/e2e/
+/target/
+/Cargo.toml
+/Cargo.lock
+/build-artifacts/
+/deployment-bundles/
+/scripts/
+/Dockerfile
+/Makefile
+/config.example.yaml
+
+# Terraform provider CACHE written by running `terraform init` from this
+# working directory — 643 MB of vendor binaries, none of it ours. The real
+# module is 36 tracked files in ../ISR/terraform, include_str!'d into the
+# binary (cloud.rs), so ISR emits it itself and this repo never needs it.
+# Same class of accident as the /src/ entry above: one `git add -A` would
+# try to publish it, and GitHub rejects any file over 100 MB anyway.
+/terraform/
