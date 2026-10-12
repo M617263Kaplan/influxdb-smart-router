@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in ISR did not behave as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If this is a security issue, please do not file it here: use **Security → Report a vulnerability** instead, which is private.
+  - type: input
+    id: version
+    attributes:
+      label: ISR version
+      description: Shown at the top of the console, or `docker exec isr isr --version`.
+      placeholder: "4.0.1 (87a15b6)"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: How ISR is deployed
+      options:
+        - Docker on macOS (Docker Desktop)
+        - Docker on Linux
+        - Docker on Windows (Docker Desktop)
+        - Kubernetes (Helm chart)
+        - Cloud VM from the Terraform in this repo
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what ISR did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines or screenshots
+      description: Operations → Engine Log, or `docker logs isr`. Please remove tokens and hostnames you would not want public.
+      render: text

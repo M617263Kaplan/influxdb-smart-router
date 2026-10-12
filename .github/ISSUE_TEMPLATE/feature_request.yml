@@ -1,0 +1,20 @@
+name: Feature request
+description: Something ISR should do, or do better
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The job, not the feature. What does the current ISR make hard?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+  - type: input
+    id: version
+    attributes:
+      label: ISR version
+      placeholder: "4.0.1"

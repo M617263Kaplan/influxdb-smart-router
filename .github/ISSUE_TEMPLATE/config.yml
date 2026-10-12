@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/M617263Kaplan/influxdb-smart-router/security/advisories/new
+    about: Private. Only you and the maintainers can see it.
+  - name: What ISR reports to its maintainers
+    url: https://github.com/M617263Kaplan/influxdb-smart-router/blob/main/TELEMETRY.md
+    about: Every field, when it is sent, and how to switch it off.
