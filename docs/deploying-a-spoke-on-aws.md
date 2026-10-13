@@ -1,13 +1,17 @@
 # Deploying an ISR spoke on AWS
 
-ISR provisions a regional spoke by **emitting a Terraform bundle you run
-yourself**. The hub never runs Terraform, never holds a cloud credential, and
-never calls an AWS API on your behalf.
+ISR provisions a regional spoke one of two ways. With a [cloud account](cloud-accounts.md)
+that verifies, the hub applies the module itself with the OpenTofu engine it
+ships, acting through the credential reference you named. Without one, or by
+choice, it **emits a Terraform bundle you run yourself** from wherever your
+credentials already live. Either way the hub holds a reference, never a key.
 
-That is a deliberate trade. A control plane holding your AWS keys has a blast
-radius far larger than one that hands you a bundle: compromise it and you have
-lost the account, not one service. So the Provision page is a **generator**, and
-the apply happens where your credentials already live.
+That is a deliberate trade. A control plane holding static AWS keys has a blast
+radius far larger than one that acts through an instance role, an environment
+profile, a Secrets Manager reference or a short-lived SSO session, or that hands
+you a bundle: compromise it and you have lost the account, not one service. So
+the Provision page is a **generator** first, and the apply happens either in the
+hub with a verified account or where your credentials already live.
 
 ## What ISR emits
 
