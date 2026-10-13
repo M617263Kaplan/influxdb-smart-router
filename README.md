@@ -503,8 +503,16 @@ flowchart TB
 | Databases | this token sees `telemetry` and nothing else |
 | Actions | read-only, write-only, or both |
 | Tables | only the `cpu` measurement |
-| Tags | only rows where `region = us-east` |
+| Fields | only the `usage_user` field |
+| Tags | only the `region` and `host` tag keys |
 | Query protocols | HTTP only, or FlightSQL too |
+
+Tables, fields and tags are allow-lists of names: a token may reference what is
+listed and nothing else, across every row. Writes are checked against them
+always; queries are checked when the token's **Enforce on queries** switch is on,
+and an empty list leaves that dimension unrestricted. Row-level separation — one
+tenant's region, one customer's devices — is done with one database per tenant,
+which the database scope enforces on every path.
 
 **Why this is powerful:**
 
