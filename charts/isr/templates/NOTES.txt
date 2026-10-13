@@ -1,0 +1,35 @@
+ISR {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}".
+
+Image: {{ include "isr.image" . }}
+  (not pulled from a registry — this image must already be loadable by the
+   cluster's container runtime, e.g. `kind load docker-image {{ include "isr.image" . }}`)
+
+Console + control plane (reachable even while the pod reports NotReady —
+that is the bootstrap window in which you create your first cluster):
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "isr.fullname" . }} {{ .Values.service.consolePort }}:{{ .Values.service.consolePort }}
+  open http://localhost:{{ .Values.service.consolePort }}/
+
+READINESS IS HONEST HERE: a fresh ISR fronts nothing, so /_admin/ready is 503
+and the pod shows 0/1 Ready until a healthy upstream or ISR-managed nodes
+exist. The console Service works anyway; the data Service below does not
+route until Ready, so nothing can hand writes to a front door with no
+storage behind it.
+
+Data plane (Ready pods only): svc/{{ include "isr.fullname" . }}-data, ports
+{{ .Values.service.dataV1Port }} (v1/v2) and {{ .Values.service.dataV3Port }} (v3).
+
+{{- if .Values.nodeManagement.enabled }}
+
+Node management is ON (ISR_ORCHESTRATOR=k8s): clusters and nodes you create
+through the ISR API/console become Kubernetes workloads, one namespace per
+cluster, labelled app.kubernetes.io/managed-by=isr.
+{{- else }}
+
+Node management is OFF: ISR runs console/proxy-only, with no cluster-scoped
+RBAC. Enable nodeManagement.enabled to launch nodes through the ISR API.
+{{- end }}
+{{- if and (ne .Values.state.backend "postgres") .Values.persistence.enabled }}
+
+State: SQLite on PVC {{ default (printf "%s-state" (include "isr.fullname" .)) .Values.persistence.existingClaim }} (single replica — set state.backend=postgres to scale).
+{{- end }}

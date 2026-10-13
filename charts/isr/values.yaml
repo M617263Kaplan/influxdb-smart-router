@@ -1,0 +1,262 @@
+# Default values for the ISR control-plane chart.
+#
+# THE IMAGE IS NOT IN A REGISTRY. ISR images are distributed as release
+# tarballs (docker load) and tags are arch-suffixed: isr:v4.0.2-arm64,
+# isr:v4.0.2-amd64. Load the image into your cluster's runtime (e.g.
+# `kind load docker-image isr:v4.0.2-arm64`) or push it to a registry you
+# control, then set image.repository/image.tag accordingly.
+image:
+  repository: isr
+  # REQUIRED: the arch-suffixed tag you loaded. The chart refuses to render
+  # without it.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# SQLite state supports EXACTLY ONE replica (single-writer database on one
+# volume). The chart refuses replicaCount > 1 unless state.backend=postgres.
+replicaCount: 1
+
+state:
+  # "sqlite" (default): state lives on the PVC below at /var/lib/isr/state.db.
+  # "postgres": state lives in PostgreSQL; the PVC is still mounted for the
+  # write queue and self-update binaries unless persistence.enabled=false.
+  backend: sqlite
+  postgres:
+    # Name of an existing Secret holding the DSN
+    # (postgres://user:pass@host:5432/isr_state?sslmode=...).
+    existingSecret: ""
+    secretKey: dsn
+    # Alternatively an inline DSN; the chart writes it into a Secret for you.
+    # Prefer existingSecret — an inline DSN sits in plain text in values files
+    # and in `helm get values` output.
+    dsn: ""
+
+persistence:
+  enabled: true
+  size: 10Gi
+  # Empty string = the cluster's default StorageClass.
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  # Reuse a PVC you created yourself instead of the chart's.
+  existingClaim: ""
+
+service:
+  type: ClusterIP
+  # Control plane + console.
+  consolePort: 9800
+  # Data plane: v1/v2 clients (8086) and v3 Core/Enterprise clients (8181).
+  dataV1Port: 8086
+  dataV3Port: 8181
+  # StatsD/DogStatsD over UDP. Off unless encryption-independent
+  # `gateway.statsd.enabled` is set below — a UDP port published with nothing
+  # listening is worse than no port.
+  statsdPort: 8125
+
+# ── ENCRYPTION AT REST ───────────────────────────────────────────────────────
+# ISR encrypts the secrets it must read back — upstream service tokens, the
+# internal CA private key, object-store credentials — with AES-256-GCM. WITHOUT
+# A KEY IT STORES THEM IN PLAINTEXT and says so once at boot:
+#
+#   "encryption at rest is not configured. No credentials are stored yet, so
+#    nothing is exposed — set ISR_ENCRYPTION_KEY_FILE before configuring object
+#    storage, upstream tokens or HA."
+#
+# On a cluster that warning scrolls past in a pod log nobody reads, so this
+# chart makes the choice explicit instead: `required: true` (the default) FAILS
+# THE INSTALL rather than shipping a control plane that quietly keeps upstream
+# credentials in the clear. Set required=false only for a throwaway evaluation.
+#
+# Generate a key:   openssl rand -base64 32
+# (32 bytes, base64 or hex. ISR refuses anything else and says the length it got.)
+encryption:
+  # Refuse to install without a key. Turn this off ONLY for evaluation.
+  required: true
+  # PREFERRED: a Secret you created yourself, so the key never passes through
+  # a values file or `helm get values` output.
+  #   kubectl create secret generic isr-encryption --from-literal=key="$(openssl rand -base64 32)"
+  existingSecret: ""
+  secretKey: key
+  # Alternative: an inline key the chart writes into a Secret for you. It sits
+  # in plain text wherever your values live — prefer existingSecret and say so
+  # rather than pretending they are equivalent.
+  key: ""
+  # ROTATION IS A BOOT OPERATION with both keys present, not a live one. Set
+  # the previous key here for one restart, then clear it.
+  previousSecret: ""
+  previousSecretKey: key
+  previousKey: ""
+
+# ── TLS ──────────────────────────────────────────────────────────────────────
+# The control plane and console are bearer-credential surfaces: admin sessions
+# and API tokens ride in headers, so anyone on the path can read or replay
+# them. ISR warns about this at boot too. Either terminate TLS in front (an
+# Ingress or a service mesh) or let ISR do it here.
+tls:
+  console:
+    # ISR terminates TLS on the console/control-plane listener itself.
+    enabled: false
+    # Extra SANs for the self-signed certificate ISR generates. Include the
+    # Service DNS name and any hostname clients will actually use, or their
+    # verification fails against a certificate that does not name them.
+    # e.g. "isr.default.svc.cluster.local,isr.example.com"
+    sans: ""
+  gateway:
+    # A separate TLS listener for the ingest gateway (Graphite, StatsD-over-TCP,
+    # OTLP, …). Empty leaves it off.
+    listen: ""
+
+# ── HOW ISR DESCRIBES ITSELF TO CLIENTS ──────────────────────────────────────
+# Behind a Service, an Ingress or a LoadBalancer, ISR's own pod address is not
+# the address anything can reach it on. These are what ISR hands out in the
+# connection strings, agent registrations and fleet callbacks it generates —
+# leave them empty and it advertises somewhere clients cannot go.
+advertise:
+  # e.g. "isr.example.com" or the Service DNS name.
+  host: ""
+  # The externally reachable tool/agent port, when it differs from the
+  # container's.
+  toolPort: ""
+
+# ── INGEST GATEWAY: StatsD over UDP ──────────────────────────────────────────
+# ISR_STATSD_LISTEN is read at STARTUP and the UDP port must be published, so
+# this is a pod restart rather than a live toggle.
+gateway:
+  statsd:
+    enabled: false
+    # Database StatsD metrics land in.
+    database: ""
+
+# Node management THROUGH the ISR API. Sets ISR_ORCHESTRATOR=k8s and grants
+# this release's ServiceAccount the resources ISR's kubectl driver actually
+# creates: a namespace per cluster (labelled app.kubernetes.io/managed-by=isr)
+# containing Deployments, Services, Secrets, ConfigMaps and Jobs. Disable it
+# and ISR runs console/proxy-only with no cluster-scoped rights.
+nodeManagement:
+  enabled: true
+
+serviceAccount:
+  create: true
+  # Defaults to the release fullname when empty.
+  name: ""
+  annotations: {}
+
+rbac:
+  create: true
+
+# The resource envelope ISR's own Kubernetes generator applies, so the
+# scheduler can bound and evict ISR predictably.
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+
+# Probe timings mirror ISR's own Kubernetes generator. Liveness = static /health (process
+# alive; a transient upstream outage must not flap the pod). Readiness =
+# /_admin/ready (sheds traffic when degraded without killing the pod).
+# Startup gives a slow first boot room before liveness starts.
+probes:
+  startup:
+    failureThreshold: 30
+    periodSeconds: 5
+  liveness:
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# The config file mounted over the image's /etc/isr/config.yaml. The image
+# bakes config.example.yaml, whose two DEMO routes point at upstreams that do
+# not exist in a fresh cluster — readiness would stay degraded forever. This
+# minimal config starts with zero routes; add clusters and routes through the
+# console/API (listeners and state paths arrive as environment variables).
+# Set create=false to keep the image's baked-in config instead.
+config:
+  create: true
+  content: |
+    # `listen` is the config schema's only required field; the ISR_LISTEN /
+    # ISR_DATA_LISTEN environment the image sets still takes precedence.
+    listen: "0.0.0.0:9800"
+    # ISR refuses to start with zero routes, and every route needs at least
+    # one upstream. This placeholder is a health-checked loopback that is
+    # correctly UNHEALTHY until you create real clusters/upstreams through
+    # the console — readiness (/_admin/ready) stays 503 until then, which is
+    # the truth: a front door fronting nothing is not ready for data traffic.
+    # Once ISR manages healthy nodes, readiness reports the route as
+    # "served by managed nodes" and turns Ready.
+    # The placeholder MUST NOT be a port ISR itself answers on: 127.0.0.1:8181
+    # is ISR's own data-plane listener, and pointing the route there makes the
+    # health check probe ISR itself — a permanently "healthy" upstream that is
+    # really a self-proxy loop, and a pod that reports Ready while fronting
+    # nothing. Port 9 (discard) is never bound by anything.
+    routes:
+      - name: bootstrap
+        path_prefix: "/"
+        upstreams:
+          - url: "http://127.0.0.1:9"
+        health_check:
+          enabled: true
+          path: "/health"
+          interval_seconds: 5
+          timeout_seconds: 2
+    prometheus:
+      enabled: true
+    cache:
+      enabled: true
+      default_ttl_seconds: 30
+    write_queue:
+      enabled: true
+      path: "/var/lib/isr/write-queue.jsonl"
+    # Arrow Flight SQL on the data plane, with the same policy the Docker
+    # image's config ships.
+    flightsql:
+      enabled: true
+      rules:
+        - name: observe-flight-sql
+          enabled: true
+          priority: 10
+          service: "arrow.flight.protocol.FlightService"
+          action: observe
+        - name: block-flight-sql-writes
+          enabled: true
+          priority: 20
+          method: "DoPut"
+          action: reject
+          status_code: 7
+          message: "FlightSQL write streams are disabled by ISR query policy"
+        - name: block-dangerous-sql
+          enabled: true
+          priority: 30
+          deny_sql_verbs: ["DROP", "DELETE", "ALTER", "TRUNCATE"]
+          action: reject
+          status_code: 7
+          message: "FlightSQL SQL text rejected by ISR query policy"
+
+# Extra environment for the ISR container, verbatim entries
+# (e.g. - name: ISR_RUN_TARPIT
+#         value: "false").
+extraEnv: []
+
+# The image's entrypoint starts as root, adopts the state volume for uid
+# 10001, then drops privileges (no Docker socket exists in a pod, so nothing
+# forces it to stay root). Override these only if your platform (e.g.
+# OpenShift arbitrary UIDs with ISR_SKIP_PRIVILEGE_DROP=1 in extraEnv)
+# handles ownership itself.
+#
+# fsGroup 10001 lets the unprivileged ISR user read the projected encryption
+# key (mounted mode 0400). ISR refuses to start with a configured key it
+# cannot read, so keep this unless your platform handles ownership itself.
+podSecurityContext:
+  fsGroup: 10001
+containerSecurityContext: {}
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

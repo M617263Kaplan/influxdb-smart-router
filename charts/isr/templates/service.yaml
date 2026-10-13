@@ -1,0 +1,47 @@
+# Two Services on purpose. A fresh ISR reports NOT READY until it fronts a
+# healthy upstream or managed nodes — but the console is exactly where you go
+# to create that first cluster. publishNotReadyAddresses keeps the console
+# reachable through the bootstrap window, while the data Service respects
+# readiness so no client can hand writes to a front door with nothing behind
+# it (a queued 202 is not a stored point).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "isr.fullname" . }}
+  labels:
+    {{- include "isr.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "isr.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: console
+      port: {{ .Values.service.consolePort }}
+      targetPort: console
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "isr.fullname" . }}-data
+  labels:
+    {{- include "isr.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "isr.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: data-v1
+      port: {{ .Values.service.dataV1Port }}
+      targetPort: data-v1
+    - name: data-v3
+      port: {{ .Values.service.dataV3Port }}
+      targetPort: data-v3
+    {{- if .Values.gateway.statsd.enabled }}
+    # UDP, and only when a listener exists behind it: a published port with
+    # nothing listening would accept datagrams and discard them.
+    - name: statsd
+      port: {{ .Values.service.statsdPort }}
+      targetPort: statsd
+      protocol: UDP
+    {{- end }}

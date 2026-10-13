@@ -1,0 +1,49 @@
+{{- if and .Values.rbac.create .Values.nodeManagement.enabled }}
+# Cluster-scoped because ISR's kubectl driver creates A NAMESPACE PER CLUSTER
+# (labelled app.kubernetes.io/managed-by=isr) and tears them down on delete /
+# Danger-Zone purge. The resource list is exactly what ISR's Kubernetes driver applies:
+# Namespaces, and Deployments / Services / Secrets / ConfigMaps / Jobs /
+# PersistentVolumeClaims (plus reading Pods for node status) inside them.
+# Nothing here grants access to RBAC itself, nodes, or other workloads'
+# controllers.
+#
+# Every kind the node bundle emits is granted here; the chart's test suite
+# derives this list from the bundle itself.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "isr.fullname" . }}-node-management
+  labels:
+    {{- include "isr.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
+  - apiGroups: [""]
+    resources: ["services", "secrets", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "isr.fullname" . }}-node-management
+  labels:
+    {{- include "isr.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "isr.fullname" . }}-node-management
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "isr.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

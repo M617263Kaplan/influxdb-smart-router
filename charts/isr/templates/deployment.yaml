@@ -1,0 +1,243 @@
+{{- include "isr.validateReplicas" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "isr.fullname" . }}
+  labels:
+    {{- include "isr.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- if and .Values.persistence.enabled (ne .Values.state.backend "postgres") }}
+  # The state PVC is ReadWriteOnce: a rolling upgrade would deadlock with the
+  # old pod holding the volume the new pod needs. Recreate releases it first.
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "isr.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "isr.labels" . | nindent 8 }}
+      annotations:
+        {{- if .Values.config.create }}
+        # Roll the pod when the config changes — a ConfigMap edit alone does
+        # not restart anything, and a stale ISR silently running the old
+        # config is worse than a visible restart.
+        checksum/config: {{ .Values.config.content | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "isr.serviceAccountName" . }}
+      # Give a terminating pod time to drain in-flight requests: ISR shuts
+      # down gracefully on SIGTERM.
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: isr
+          image: {{ include "isr.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: console
+              containerPort: 9800
+            - name: data-v1
+              containerPort: 8086
+            - name: data-v3
+              containerPort: 8181
+            {{- if .Values.gateway.statsd.enabled }}
+            - name: statsd
+              containerPort: {{ .Values.service.statsdPort }}
+              protocol: UDP
+            {{- end }}
+          env:
+            - name: ISR_INSTANCE_ID
+              value: {{ include "isr.fullname" . | quote }}
+            # The entrypoint drops to uid 10001 but the environment keeps the
+            # image's HOME=/root, where kubectl dies with EACCES traversing
+            # /root/.kube instead of falling back to in-cluster config — which
+            # would make the k8s node driver report the API unreachable. A
+            # readable HOME with no .kube/config restores the fallback
+            # (verified: auth can-i as uid 10001 says yes only with this set).
+            - name: HOME
+              value: /var/lib/isr
+            {{- if .Values.nodeManagement.enabled }}
+            # The kubectl driver: node/cluster launches requested through the
+            # ISR API become `kubectl apply` under this pod's ServiceAccount.
+            - name: ISR_ORCHESTRATOR
+              value: k8s
+            {{- end }}
+            {{- if eq .Values.state.backend "postgres" }}
+            - name: ISR_STATE_BACKEND
+              value: postgres
+            - name: ISR_STATE_DSN
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.state.postgres.existingSecret }}
+                  name: {{ .Values.state.postgres.existingSecret }}
+                  key: {{ .Values.state.postgres.secretKey }}
+                  {{- else }}
+                  name: {{ include "isr.fullname" . }}-state
+                  key: dsn
+                  {{- end }}
+            {{- end }}
+            {{- if or .Values.encryption.existingSecret .Values.encryption.key }}
+            # ENCRYPTION AT REST. The FILE form, not the inline one: an
+            # environment variable is readable by anything that can reach
+            # /proc/<pid>/environ and is copied into crash dumps, while a
+            # projected Secret is a file ISR reads once at boot. ISR itself
+            # documents the file as preferred for exactly this reason.
+            - name: ISR_ENCRYPTION_KEY_FILE
+              value: /etc/isr/secrets/encryption-key
+            {{- end }}
+            {{- if or .Values.encryption.previousSecret .Values.encryption.previousKey }}
+            # Rotation: present for ONE restart with both keys, then cleared.
+            - name: ISR_ENCRYPTION_KEY_OLD_FILE
+              value: /etc/isr/secrets/encryption-key-old
+            {{- end }}
+            {{- if .Values.tls.console.enabled }}
+            - name: ISR_CONSOLE_TLS
+              value: "1"
+            {{- with .Values.tls.console.sans }}
+            - name: ISR_CONSOLE_TLS_SANS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.tls.gateway.listen }}
+            - name: ISR_GATEWAY_TLS_LISTEN
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.advertise.host }}
+            - name: ISR_ADVERTISE_HOST
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.advertise.toolPort }}
+            - name: ISR_TOOL_ADVERTISE_PORT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.gateway.statsd.enabled }}
+            - name: ISR_STATSD_LISTEN
+              value: "0.0.0.0:{{ .Values.service.statsdPort }}"
+            {{- with .Values.gateway.statsd.database }}
+            - name: ISR_STATSD_DB
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.persistence.enabled .Values.config.create .Values.encryption.existingSecret .Values.encryption.key }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: state
+              mountPath: /var/lib/isr
+            {{- end }}
+            {{- if .Values.config.create }}
+            - name: config
+              mountPath: /etc/isr/config.yaml
+              subPath: config.yaml
+            {{- end }}
+            {{- if or .Values.encryption.existingSecret .Values.encryption.key }}
+            # readOnly, and mode 0400 on the volume below: the key is read once
+            # at boot and nothing should be able to alter it afterwards.
+            - name: encryption
+              mountPath: /etc/isr/secrets
+              readOnly: true
+            {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          # Probe contract mirrors ISR's own Kubernetes generator — see values.yaml.
+          # SCHEME FOLLOWS THE LISTENER. Kubernetes defaults httpGet to
+          # scheme: HTTP, so with tls.console.enabled the probe spoke plaintext
+          # to a port that had just been switched to TLS — startupProbe never
+          # succeeded and livenessProbe restarted the pod. A supported values
+          # setting made the chart un-startable.
+          #
+          # Templated on the SAME flag that switches the listener, not set
+          # unconditionally: the plaintext default is the common case and must
+          # keep working. The probes do not verify the certificate, so the
+          # self-issued one is fine.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: console
+              {{- if .Values.tls.console.enabled }}
+              scheme: HTTPS
+              {{- end }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: console
+              {{- if .Values.tls.console.enabled }}
+              scheme: HTTPS
+              {{- end }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /_admin/ready
+              port: console
+              {{- if .Values.tls.console.enabled }}
+              scheme: HTTPS
+              {{- end }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+      {{- /* Every source that emits a volumeMount above is named here, so each
+           mount has a volume behind it whatever combination of values is set. */ -}}
+      {{- if or .Values.persistence.enabled .Values.config.create .Values.encryption.existingSecret .Values.encryption.key }}
+      volumes:
+        {{- if or .Values.encryption.existingSecret .Values.encryption.key }}
+        - name: encryption
+          projected:
+            defaultMode: 0400
+            sources:
+              - secret:
+                  name: {{ default (printf "%s-encryption" (include "isr.fullname" .)) .Values.encryption.existingSecret }}
+                  items:
+                    - key: {{ .Values.encryption.secretKey }}
+                      path: encryption-key
+              {{- if or .Values.encryption.previousSecret .Values.encryption.previousKey }}
+              - secret:
+                  name: {{ default (printf "%s-encryption" (include "isr.fullname" .)) .Values.encryption.previousSecret }}
+                  items:
+                    - key: {{ if .Values.encryption.previousSecret }}{{ .Values.encryption.previousSecretKey }}{{ else }}key-old{{ end }}
+                      path: encryption-key-old
+              {{- end }}
+        {{- end }}
+        {{- if .Values.persistence.enabled }}
+        - name: state
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-state" (include "isr.fullname" .)) .Values.persistence.existingClaim }}
+        {{- end }}
+        {{- if .Values.config.create }}
+        - name: config
+          configMap:
+            name: {{ include "isr.fullname" . }}-config
+        {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

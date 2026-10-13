@@ -1,0 +1,16 @@
+apiVersion: v2
+name: isr
+description: >-
+  ISR — single-binary InfluxDB 3 Enterprise front door: proxy, cache,
+  in-process load balancer, and the ISR control plane + console. This chart
+  deploys the ISR control plane only; InfluxDB nodes, clusters and Traffic Lab
+  agents are then managed THROUGH the ISR API (ISR_ORCHESTRATOR=k8s drives
+  kubectl with this release's ServiceAccount).
+type: application
+# Chart version, moves independently of ISR itself.
+version: 0.2.19
+# The ISR release this chart was written against and validated with; it bumps
+# with the product. Published images are arch-suffixed (vX.Y.Z-arm64 /
+# vX.Y.Z-amd64), so `image.tag` is required and this value is what the chart
+# suggests when it is missing (see _helpers.tpl).
+appVersion: "v4.0.2"

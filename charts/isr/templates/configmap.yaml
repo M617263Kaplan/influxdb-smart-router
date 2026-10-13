@@ -1,0 +1,17 @@
+{{- if .Values.config.create }}
+# Replaces the image's baked-in config.example.yaml. That file carries two
+# DEMO routes whose upstreams do not exist in a fresh cluster, and readiness
+# (/_admin/ready) correctly reports degraded with 0 healthy upstreams — so a
+# chart that kept the demo config would deploy pods that never become Ready.
+# A fresh install must be Ready with zero routes; upstreams are added through
+# the console/API afterwards.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "isr.fullname" . }}-config
+  labels:
+    {{- include "isr.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+{{ .Values.config.content | indent 4 }}
+{{- end }}

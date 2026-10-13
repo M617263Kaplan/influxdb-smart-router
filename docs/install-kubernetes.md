@@ -1,134 +1,147 @@
 # Running ISR on Kubernetes
 
-ISR runs on Kubernetes as an ordinary Deployment — adopting a cluster and
-serving reads and writes through it, exactly as it does on Docker.
+ISR runs on Kubernetes as a Deployment installed from the Helm chart in
+[`charts/isr`](../charts/isr). With node management on (the default), ISR
+provisions InfluxDB 3 Enterprise clusters into the same Kubernetes cluster
+through its API and console: one namespace per cluster, MinIO on a persistent
+volume, and nodes that serve through ISR as soon as their pods are ready.
 
 ---
 
-## Loading a locally built image
+## Before you start
 
-If you build an ISR image locally and deploy it with `imagePullPolicy: Never`,
-the pod fails:
+- **An InfluxDB 3 Enterprise licence** (the JWT file). Getting Started asks for
+  it when you create the first cluster.
+- **The ISR image in your cluster's container runtime** — see the next section.
+- `helm` 3 and `kubectl` pointed at the cluster.
 
-```
-NAME                   READY   STATUS               RESTARTS   AGE
-isr-769c798446-gtrrp   0/1     ErrImageNeverPull    0          3m
-```
+## Load the image
 
-The image is right there in `docker images`. The pod still cannot see it.
+ISR images are distributed as release tarballs and tagged per architecture
+(`isr:v4.0.2-arm64`, `isr:v4.0.2-amd64`). Download the tarball for your nodes
+from the [release](https://github.com/M617263Kaplan/influxdb-smart-router/releases/latest),
+load it into Docker, then put it where the kubelet looks.
 
-**Because Kubernetes is not looking at Docker's image store.** Docker Desktop's
-Kubernetes runs **containerd**, which keeps its own store, and the Docker daemon's
-images are not in it. `imagePullPolicy: Never` means "the image is already on the
-node" — and on the node, it is not. The error is accurate and reads as though it
-is about a policy, which is what makes it cost time.
-
-This is not specific to ISR. It bites anything deployed from a local build.
-
-### Docker Desktop
-
-Save the image out of Docker and import it into the node's containerd store.
-Docker Desktop's Kubernetes node is itself a container called
-`desktop-control-plane`, so it can be piped straight in:
+Kubernetes does not read Docker's image store. Docker Desktop's Kubernetes runs
+**containerd**, which keeps its own store, so an image that is right there in
+`docker images` is still invisible to the node. Import it into the node's
+containerd, in the `k8s.io` namespace:
 
 ```bash
-docker save isr:<tag> -o /tmp/isr.tar
-docker exec -i desktop-control-plane ctr -n k8s.io images import - < /tmp/isr.tar
+docker load < isr-v4.0.2-linux-arm64-image.tar.gz
+docker save isr:v4.0.2-arm64 | docker exec -i desktop-control-plane ctr -n k8s.io images import -
 ```
 
-The `-n k8s.io` namespace matters: containerd namespaces are isolated, and an
-image imported into the default namespace is invisible to the kubelet.
-
-Then roll the Deployment so the pod is rescheduled against the newly present
-image — an existing `ErrImageNeverPull` pod will not retry on its own:
-
-```bash
-kubectl -n <namespace> rollout restart deploy/isr
-kubectl -n <namespace> wait --for=condition=available --timeout=180s deploy/isr
-```
-
-### Other distributions
-
-Each has a first-class equivalent, and any of them is better than the `ctr`
-pipe above where available:
+Other distributions have a first-class equivalent:
 
 | distribution | command |
 |---|---|
-| kind | `kind load docker-image isr:<tag>` |
-| minikube | `minikube image load isr:<tag>` |
-| k3s / k3d | `k3d image import isr:<tag>` |
-| anything else | push to a registry the cluster can pull from |
+| kind | `kind load docker-image isr:v4.0.2-arm64` |
+| minikube | `minikube image load isr:v4.0.2-arm64` |
+| k3s / k3d | `k3d image import isr:v4.0.2-arm64` |
+| anything else | push to a registry the cluster can pull from, and set `image.repository` |
 
-**In production, use a registry.** Importing images by hand is a development
-convenience; it does not survive a node being replaced, which is the one thing
-Kubernetes is most likely to do.
+In production, use a registry: an image imported by hand does not survive a
+node being replaced.
 
----
-
-## A minimal Deployment
-
-ISR needs no Docker socket to run on Kubernetes: it fronts, routes, and
-**adopts** clusters exactly as it does on Docker. ISR itself is deployed with a
-manifest like the one below; `/api/isr/k8s/*` is how ISR provisions InfluxDB
-clusters onto Kubernetes once it is running.
-
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: isr
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: isr
-  namespace: isr
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: isr }
-  template:
-    metadata:
-      labels: { app: isr }
-    spec:
-      containers:
-        - name: isr
-          image: isr:<tag>
-          env:
-            - name: ISR_LISTEN
-              value: "0.0.0.0:9800"
-            - name: ISR_DATA_LISTEN
-              value: "0.0.0.0:8086"
-            - name: ISR_STATE_DB
-              value: "/var/lib/isr/state.db"
-          ports:
-            - containerPort: 9800   # admin API + console
-            - containerPort: 8086   # data plane
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: isr
-  namespace: isr
-spec:
-  selector: { app: isr }
-  ports:
-    - { name: admin, port: 9800, targetPort: 9800 }
-    - { name: data,  port: 8086, targetPort: 8086 }
-```
-
-**This manifest does not persist the state database.** The right answer depends
-on your cluster, so choose it explicitly: a PVC for a single replica, or an
-external Postgres via `ISR_STATE_DSN` for HA. Deployed exactly as written, a pod
-restart loses ISR's administrators, tokens and cluster registry, so add
-persistence before this is more than a test deployment. See
-`docs/high-availability.md`.
-
-Reach it while testing:
+## Install with Helm
 
 ```bash
-kubectl -n isr port-forward svc/isr 9800:9800 8086:8086
+git clone https://github.com/M617263Kaplan/influxdb-smart-router.git
+cd influxdb-smart-router
+
+kubectl create namespace isr
+# Encryption at rest is required. The key never enters a values file.
+kubectl -n isr create secret generic isr-encryption \
+  --from-literal=key="$(openssl rand -base64 32)"
+
+helm install isr ./charts/isr -n isr \
+  --set image.tag=v4.0.2-arm64 \
+  --set encryption.existingSecret=isr-encryption
+
+kubectl -n isr port-forward svc/isr 9800:9800
 ```
+
+Open <http://localhost:9800>, create the first administrator, and run
+**Getting Started**. `image.tag` is required: it is the arch-suffixed tag you
+loaded, and the chart refuses to render without one.
+
+Readiness reports what the pod is actually doing. A fresh ISR fronts nothing,
+so `/_admin/ready` answers 503 and the pod shows `0/1 Ready` until a cluster
+serves through it. The console Service is reachable regardless, which is how
+you create that first cluster; the data Service routes traffic once the pod is
+Ready, so nothing can hand writes to a front door with no storage behind it.
+`helm install --wait` therefore returns when ISR fronts a cluster, not when
+the pod starts.
+
+## Your first cluster
+
+Choose the Kubernetes target in Getting Started. ISR creates a namespace named
+`isr-<cluster>` holding the licence and admin-token Secrets, one Deployment and
+Service per node mode, and MinIO as the cluster's object store on a
+PersistentVolumeClaim. Getting Started reports the cluster licensed and serving
+from the pods themselves, and the nodes join ISR's routing pool the moment
+they are ready — the next steps (database, first token, first write) run
+against them through ISR.
+
+The MinIO volume is 20Gi on the cluster's default StorageClass. Set its size
+or class through the chart's `extraEnv`:
+
+```yaml
+extraEnv:
+  - name: ISR_K8S_MINIO_STORAGE
+    value: "100Gi"
+  - name: ISR_K8S_MINIO_STORAGE_CLASS
+    value: "fast-ssd"
+```
+
+To bring your own object store instead, create the cluster with S3, Blob or
+GCS in Getting Started.
+
+## Values worth knowing
+
+| value | what it does |
+|---|---|
+| `image.tag` | **Required.** The arch-suffixed tag you loaded. |
+| `image.repository` | `isr` by default; set it when you pushed the image to a registry. |
+| `encryption.existingSecret` | A Secret you made, key `key`. Preferred over `encryption.key`, which puts the key in your values. |
+| `persistence.size`, `persistence.storageClass` | The PVC that holds ISR's own state (10Gi by default). |
+| `state.backend=postgres` + `state.postgres.existingSecret` | Shared state for more than one replica; SQLite supports exactly one. |
+| `nodeManagement.enabled` | On by default: ISR provisions clusters into this Kubernetes cluster through its ServiceAccount. Off gives a console-and-proxy-only ISR with no cluster-scoped RBAC. |
+| `tls.console.enabled`, `tls.console.sans` | ISR terminates TLS on the console listener itself; name the Service DNS name and every hostname clients use. |
+| `advertise.host`, `advertise.toolPort` | What ISR hands out in connection strings and fleet callbacks when it sits behind a Service or Ingress. |
+| `config.content` | ISR's config file. It ships with the query cache, the durable write queue, Prometheus metrics and Arrow Flight SQL enabled. |
+| `podSecurityContext.fsGroup` | 10001, so the unprivileged ISR user can read the projected encryption key. |
+
+`helm show values ./charts/isr` lists everything, with the reasoning beside
+each setting.
+
+## ISR's own TLS listeners
+
+**Security → Cluster TLS** can serve the console over HTTPS and the data plane
+over TLS on ISR's own certificate authority, with client certificates required
+if you want them. The listeners bind inside the pod on ports 9443 (console)
+and 8443 (data plane); reach them through your Ingress, a Service you add, or
+a port-forward to the pod. Arrow Flight SQL clients connect to the data-plane
+listener with `grpc+tls://`.
+
+## Without Helm
+
+A Deployment and Service of your own work too — ISR fronts, routes and adopts
+clusters exactly as it does on Docker, and `/api/isr/k8s/*` provisions
+clusters once it is running. The chart is the reference for what a complete
+deployment carries: the ServiceAccount and ClusterRole for node management,
+the encryption key as a projected Secret at `ISR_ENCRYPTION_KEY_FILE`, a
+persistent volume at `/var/lib/isr`, and the readiness probe on
+`/_admin/ready`. Render it to see the objects:
+
+```bash
+helm template isr ./charts/isr --set image.tag=v4.0.2-arm64 \
+  --set encryption.existingSecret=isr-encryption
+```
+
+Whatever you deploy by hand, give `/var/lib/isr` a persistent volume: it holds
+ISR's administrators, tokens and cluster registry.
 
 ---
 

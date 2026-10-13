@@ -144,6 +144,21 @@ docker run -d --name isr \
 The Docker socket is how ISR launches and scales your InfluxDB nodes. Prefer a
 least-privilege socket proxy? ISR supports it.
 
+### Kubernetes, with Helm
+
+```bash
+kubectl -n isr create secret generic isr-encryption \
+  --from-literal=key="$(openssl rand -base64 32)"
+helm install isr ./charts/isr -n isr \
+  --set image.tag=v<version>-arm64 \
+  --set encryption.existingSecret=isr-encryption
+```
+
+ISR then provisions InfluxDB clusters into the same Kubernetes cluster from
+Getting Started — one namespace per cluster, MinIO on a persistent volume.
+Loading the image into your cluster's runtime and every value worth knowing:
+[docs/install-kubernetes.md](docs/install-kubernetes.md).
+
 ### AWS · GCP · Azure
 
 ISR deploys its own spokes into your cloud accounts:
