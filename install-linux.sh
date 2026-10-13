@@ -511,7 +511,7 @@ _port_holder() {  # $1 = port; echoes what publishes it, empty if free
 }
 
 _busy=''
-for _p in "$ISR_PORT" 8086 8181 "$ISR_TOOL_PORT"; do
+for _p in "$ISR_PORT" 8086 8181 "$ISR_TOOL_PORT" 9443 8443; do
   _by="$(_port_holder "$_p")"
   [ -n "$_by" ] && _busy="${_busy}    port ${_p} — held by ${_by}
 "
@@ -522,7 +522,7 @@ if [ -n "$_busy" ]; then
   case "$_self" in sh|bash|dash|zsh|-*|'') _self="the installer" ;; *) _self="sh $_self" ;; esac
   {
     echo ""
-    echo "REFUSING: ISR needs four ports and some are already in use."
+    echo "REFUSING: ISR needs six ports and some are already in use."
     echo ""
     printf '%s' "$_busy"
     echo ""
@@ -535,7 +535,7 @@ if [ -n "$_busy" ]; then
     echo "  If you want this ISR alongside them, move ITS OWN two ports:"
     echo "      ISR_PORT=<free> ISR_TOOL_PORT=<free> ${_self}"
     echo ""
-    echo "  Ports 8086 and 8181 are ISR's data plane and cannot be moved here —"
+    echo "  Ports 8086 and 8181 (data plane) and 9443 and 8443 (TLS) cannot be moved here —"
     echo "  whatever holds those has to stop first."
     echo ""
     echo "  Do NOT reach for FRESH=1 to clear this. It wipes admins, config,"
@@ -1137,7 +1137,7 @@ fi
 say "Starting ISR…"
 # shellcheck disable=SC2086
 $DOCKER run -d --name "$NAME" --network "$NETWORK" --restart unless-stopped \
-  -p "${ISR_PORT}:9800" -p 8086:8086 -p 8181:8181 -p "${ISR_TOOL_PORT}:9843" \
+  -p "${ISR_PORT}:9800" -p 8086:8086 -p 8181:8181 -p "${ISR_TOOL_PORT}:9843" -p 9443:9443 -p 8443:8443 \
   -v "${DOCKER_SOCK}:/var/run/docker.sock" \
   -v "$STATE_VOLUME":/var/lib/isr \
   ${KEY_MOUNT:+-v "${KEY_MOUNT}:/etc/isr/encryption.key:ro"} \
@@ -1205,7 +1205,7 @@ if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -qi '^S
 fi
 
 if [ "$first_run" = yes ]; then
-  SIGNIN="First-run sign-in:  admin / admin  (you'll create your own admin next)
+  SIGNIN="First run:          the console asks you to create your administrator account.
   Then follow Getting Started to stand up a live InfluxDB 3 cluster."
 else
   SIGNIN="Sign-in:            use your EXISTING credentials from the prior install (this reused the '${STATE_VOLUME}' state volume).

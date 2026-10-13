@@ -339,7 +339,7 @@ Say "Starting ISR…"
 # flags, which is part of why they were dropped here in the first place.
 $runArgs = @(
   'run', '-d', '--name', $Name, '--network', $Network, '--restart', 'unless-stopped',
-  '-p', "${Port}:9800", '-p', '8086:8086', '-p', '8181:8181', '-p', "${ToolPort}:9843",
+  '-p', "${Port}:9800", '-p', '8086:8086', '-p', '8181:8181', '-p', "${ToolPort}:9843", '-p', '9443:9443', '-p', '8443:8443',
   '-v', '/var/run/docker.sock:/var/run/docker.sock',
   '-v', "${StateVolume}:/var/lib/isr",
   '-e', 'ISR_LISTEN=0.0.0.0:9800',
