@@ -143,7 +143,8 @@ state volume, then start it:
 ```bash
 docker load < isr-v<version>-linux-arm64-image.tar.gz      # or -amd64
 docker network create isr-cluster-net
-mkdir -p ~/.isr && openssl rand -base64 32 > ~/.isr/encryption.key
+mkdir -p ~/.isr && chmod 700 ~/.isr
+[ -s ~/.isr/encryption.key ] || (umask 077 && openssl rand -base64 32 > ~/.isr/encryption.key)
 docker run -d --name isr --network isr-cluster-net --restart unless-stopped \
   -p 9800:9800 -p 8086:8086 -p 8181:8181 -p 9843:9843 -p 9443:9443 -p 8443:8443 \
   -v /var/run/docker.sock:/var/run/docker.sock \
@@ -1347,8 +1348,11 @@ fleet. Because ISR is the analyzed vantage point, an agent gets conclusions
   `recent_routing_decisions`.
 - **Guarded write tools** (operator/admin scope): `snooze_alert`, `close_alert`,
   `block_ip`, `unblock_ip`. Each STAGES the action and returns a `confirmation_id`;
-  a second `confirm_action` call executes it — the human-approval step. All
-  reversible; no destructive ops are exposed.
+  nothing is applied until it is confirmed. An administrator confirms it in the
+  console (Operations → pending actions), or an admin-scoped token calls
+  `confirm_action`. The operator-scoped token that staged a write cannot confirm
+  it: operator proposes, admin approves. All reversible; no destructive ops are
+  exposed.
 
 **Governance & security** (console **Security & Access → MCP Security**, or
 `GET`/`PUT /api/isr/mcp/governance`):
@@ -1590,7 +1594,7 @@ curl -X PUT localhost:9800/api/isr/telemetry/config -H 'content-type: applicatio
   -d '{"config":{"enabled":true,"interval_seconds":60,
         "target":{"mode":"external","version":"v3","url":"http://influx:8086",
                   "v3_database":"isr_ops","v3_token":"…"},
-        "metrics":["isr_requests","isr_resources","isr_security"]}}'
+        "metrics":["requests","resources","security"]}}'
 curl -X POST localhost:9800/api/isr/telemetry/test -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' -d '{"config":{ … the same object as above … }}'
 ```
