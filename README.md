@@ -109,6 +109,9 @@ It detects your architecture, pulls the matching release image, verifies the
 checksum, loads it, and starts the hub. When it finishes it **opens the console
 in your default browser** — you land on Getting Started without copying a URL.
 
+Current release: **ISR 4.0.6** — [release notes](https://github.com/M617263Kaplan/influxdb-smart-router/releases/tag/v4.0.6). Every
+release, with its signed assets and how to verify them: [releases](https://github.com/M617263Kaplan/influxdb-smart-router/releases).
+
 It opens the browser only once the console has actually answered, so you never
 get a connection error that looks like a failed install. It won't try over SSH,
 on a host with no display, or if you set `NO_BROWSER=1` (`BROWSER=none` works
