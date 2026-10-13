@@ -133,31 +133,48 @@ too) — in each of those cases it prints the URL and says which one applied.
 
 ### Docker, by hand
 
+Load the image from the release assets (verify the download first — the release
+notes show how), give ISR a network of its own and an encryption key for its
+state volume, then start it:
+
 ```bash
-docker run -d --name isr \
-  -p 9800:9800 -p 8086:8086 -p 8181:8181 \
+docker load < isr-v<version>-linux-arm64-image.tar.gz      # or -amd64
+docker network create isr-cluster-net
+mkdir -p ~/.isr && openssl rand -base64 32 > ~/.isr/encryption.key
+docker run -d --name isr --network isr-cluster-net --restart unless-stopped \
+  -p 9800:9800 -p 8086:8086 -p 8181:8181 -p 9843:9843 -p 9443:9443 -p 8443:8443 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v isr-state:/var/lib/isr \
+  -v ~/.isr/encryption.key:/etc/isr/encryption.key:ro \
+  -e ISR_ENCRYPTION_KEY_FILE=/etc/isr/encryption.key \
   isr:v<version>-arm64     # or -amd64
 ```
 
-The Docker socket is how ISR launches and scales your InfluxDB nodes. Prefer a
-least-privilege socket proxy? ISR supports it.
+9800 is the console and management API, 8086 and 8181 the data plane, 9843 is
+Call Home (external tools asking to connect), and 9443 / 8443 are the HTTPS
+console and TLS data plane once you enable them under Security & Access →
+Cluster TLS. The Docker socket is how ISR launches and scales your InfluxDB
+nodes. Prefer a least-privilege socket proxy? ISR supports it.
 
 ### Kubernetes, with Helm
 
 ```bash
+git clone https://github.com/M617263Kaplan/influxdb-smart-router.git && cd influxdb-smart-router
+kubectl create namespace isr
 kubectl -n isr create secret generic isr-encryption \
   --from-literal=key="$(openssl rand -base64 32)"
 helm install isr ./charts/isr -n isr \
   --set image.tag=v<version>-arm64 \
   --set encryption.existingSecret=isr-encryption
+kubectl -n isr port-forward svc/isr 9800:9800
 ```
 
 ISR then provisions InfluxDB clusters into the same Kubernetes cluster from
 Getting Started — one namespace per cluster, MinIO on a persistent volume.
 Loading the image into your cluster's runtime and every value worth knowing:
 [docs/install-kubernetes.md](docs/install-kubernetes.md).
+
+Every guide, on one page: [docs/README.md](docs/README.md).
 
 ### AWS · GCP · Azure
 
@@ -708,12 +725,12 @@ replicas through the leader-gated deployment apply API.
 
 ```bash
 # Safe dry-run
-curl -X POST http://<host>:9800/_admin/api/deployment/apply \
+curl -X POST http://<host>:9800/_admin/api/deployment/apply -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' \
   --data '{"target":"local-docker","dry_run":true}'
 
 # Real apply
-curl -X POST http://<host>:9800/_admin/api/deployment/apply \
+curl -X POST http://<host>:9800/_admin/api/deployment/apply -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' \
   --data '{"target":"local-docker","dry_run":false}'
 ```
@@ -724,6 +741,20 @@ environment variables: `ISR_LISTEN`, `ISR_INSTANCE_ID`, `ISR_REGION`,
 `ISR_LEADER_TICK_SECONDS`.
 
 ## Admin API reference
+
+Management calls carry the signed-in administrator's session in
+`X-ISR-Admin-Session`. Sign in once and keep the value:
+
+```bash
+SESSION=$(curl -s -X POST localhost:9800/api/isr/admins/login \
+  -H 'content-type: application/json' \
+  -d '{"username":"<admin>","password":"<password>"}' | jq -r .session)
+```
+
+For automation, an `israpi_` API token (Security & Access → ISR API Tokens) does
+the same job, sent as `Authorization: Bearer israpi_…`. Writes and queries on the
+data plane (8086 / 8181) use `isrt_` client tokens; the two kinds are scoped to
+different planes on purpose.
 
 - `GET /_admin/api/config` redacted runtime config
 - `GET /_admin/api/balancer` load-balancer and upstream health
@@ -845,7 +876,7 @@ acceptance; see the assurance levels under *Occasionally-connected edge*). Same 
 gate; the streaming runner ignores `tee` jobs.
 
 ```bash
-curl -X POST http://<edge>:9800/api/isr/replication/jobs \
+curl -X POST http://<edge>:9800/api/isr/replication/jobs -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' \
   --data '{"name":"live-mirror","enabled":true,"mode":"tee",
            "hub_url":"http://spoke:8181",
@@ -858,7 +889,7 @@ catch-up (e.g. to bound the number of hub writes).
 
 ```bash
 # Create a job (edge telemetry.cpu → hub db telemetry_from_edge)
-curl -X POST http://<host>:9800/api/isr/replication/jobs \
+curl -X POST http://<host>:9800/api/isr/replication/jobs -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' \
   --data '{"name":"cpu-mirror","enabled":true,"mode":"stream",
            "hub_url":"http://hub:8181",
@@ -866,10 +897,10 @@ curl -X POST http://<host>:9800/api/isr/replication/jobs \
                       "dest_database":"telemetry_from_edge"}]}'
 
 # Run one immediately (operator "Run now"); returns the fresh status doc
-curl -X POST http://<host>:9800/api/isr/replication/jobs/<id>/run
+curl -H "X-ISR-Admin-Session: $SESSION" -X POST http://<host>:9800/api/isr/replication/jobs/<id>/run
 
 # Live status (per-job state, points_last_run, checkpoints, last_error)
-curl http://<host>:9800/api/isr/replication/status
+curl -H "X-ISR-Admin-Session: $SESSION" http://<host>:9800/api/isr/replication/status
 ```
 
 Transport is HTTP(S) with an optional bearer `token` on the job, or mutual TLS
@@ -1121,7 +1152,7 @@ read-side complement — one query fanned out to the local cluster and every
 regional spoke, with the row sets merged and tagged by `__source`:
 
 ```bash
-curl -X POST http://<host>:9800/api/isr/federate/query \
+curl -X POST http://<host>:9800/api/isr/federate/query -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' \
   --data '{"db":"metrics","q":"SELECT * FROM temp","targets":[{"name":"eu","url":"https://eu-spoke:8181"}]}'
 ```
@@ -1164,13 +1195,13 @@ throttle, kill, or bill per-org:
 
 ```bash
 # Provision the query-expensive / write-expensive pools + turn enforcement on
-curl -X POST localhost:9800/api/isr/getting-started/expensive-pools \
+curl -X POST localhost:9800/api/isr/getting-started/expensive-pools -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' \
   -d '{"pool_base":"<cluster>","query_units":432}'
 
 # Inspect current cost state + calibration
-curl localhost:9800/api/isr/query-cost/snapshot
-curl localhost:9800/api/isr/query-cost/calibration
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/query-cost/snapshot
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/query-cost/calibration
 ```
 
 Console: **Monitor → Expensive Queries** (the Query Cost Engine card).
@@ -1185,12 +1216,12 @@ database maps to a target you pick (existing DB, a new name, or the source name)
 with its own retention. Console: **Migrate → Time-Series Migration**.
 
 ```bash
-curl -X POST localhost:9800/api/isr/migration/start -H 'content-type: application/json' -d '{
+curl -H "X-ISR-Admin-Session: $SESSION" -X POST localhost:9800/api/isr/migration/start -H 'content-type: application/json' -d '{
   "approach":"schema-aware","dup":"last-wins","mode":"concurrent",
   "source":{"kind":"influx-oss-v2","host":"http://oss:8086","org":"acme","token":"…"},
   "target":{"cluster":"<cluster>","schema_aware":true},
   "mappings":[{"source_bucket":"telemetry","target_bucket":"telemetry","retention":"30d"}]}'
-curl localhost:9800/api/isr/migration/status
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/migration/status
 ```
 
 > **Retention & data range.** The engine rejects points older than the retention
@@ -1212,10 +1243,10 @@ whether the backup is 66 MB or 66 TB. Console: **Migrate → Migration → From 
 backup file**.
 
 ```bash
-curl -X POST localhost:9800/api/isr/migration/backup/scan -H 'content-type: application/json' \
+curl -X POST localhost:9800/api/isr/migration/backup/scan -H 'content-type: application/json' -H "X-ISR-Admin-Session: $SESSION" \
   -d '{"path":"/var/lib/isr/import/backup"}'          # shards, sizes, per-shard time ranges
 
-curl -X POST localhost:9800/api/isr/migration/backup/export -H 'content-type: application/json' -d '{
+curl -H "X-ISR-Admin-Session: $SESSION" -X POST localhost:9800/api/isr/migration/backup/export -H 'content-type: application/json' -d '{
   "backup_dir":"/var/lib/isr/import/backup", "database":"telemetry",
   "job_id":"telemetry-import", "background":true,
   "concurrency":6, "max_scratch_mb":100000,
@@ -1224,7 +1255,7 @@ curl -X POST localhost:9800/api/isr/migration/backup/export -H 'content-type: ap
     {"name":"dedicated","connection_id":"…","batch_bytes":11534336,"batch_lines":80000},
     {"name":"cloud3","connection_id":"…"}
   ]}'
-curl localhost:9800/api/isr/migration/backup/status?job_id=telemetry-import
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/migration/backup/status?job_id=telemetry-import
 ```
 
 **Batch sizing is per destination.** A batch closes on whichever
@@ -1295,9 +1326,9 @@ shows a banner with *what happened*, *why it matters*, and *what to do*, and the
 admin can **sleep (snooze)** or **close (ack)** each one.
 
 ```bash
-curl 'localhost:9800/api/isr/notifications?status=open&min_severity=error'
-curl -X POST localhost:9800/api/isr/notifications/<id>/snooze -d '{"until_epoch_sec":…}'
-curl -X POST localhost:9800/api/isr/notifications/<id>/ack
+curl -H "X-ISR-Admin-Session: $SESSION" 'localhost:9800/api/isr/notifications?status=open&min_severity=error'
+curl -H "X-ISR-Admin-Session: $SESSION" -X POST localhost:9800/api/isr/notifications/<id>/snooze -d '{"until_epoch_sec":…}'
+curl -H "X-ISR-Admin-Session: $SESSION" -X POST localhost:9800/api/isr/notifications/<id>/ack
 ```
 
 ## MCP server (agents & LLMs)
@@ -1363,11 +1394,11 @@ after a capture also appear here, and a failed-sign-in alert offers a one-click
 **Block IP**.
 
 ```bash
-curl localhost:9800/api/isr/blocklist            # {ip:[…], user:[…], token:[…], agent:[…]}
-curl -X POST localhost:9800/api/isr/blocklist \
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/blocklist            # {ip:[…], user:[…], token:[…], agent:[…]}
+curl -X POST localhost:9800/api/isr/blocklist -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' \
   -d '{"kind":"agent","value":"sqlmap","reason":"scanner"}'
-curl -X DELETE 'localhost:9800/api/isr/blocklist/ip?value=45.146.164.7'
+curl -H "X-ISR-Admin-Session: $SESSION" -X DELETE 'localhost:9800/api/isr/blocklist/ip?value=45.146.164.7'
 ```
 
 Auth-failure alerts carry the **client IP + User-Agent**.
@@ -1380,7 +1411,7 @@ rate**, **peak query volume per day/week/month**, and the **busiest days & hours
 so an operator can see, at a glance, what each database costs and when it's busy.
 
 ```bash
-curl localhost:9800/api/isr/data/analytics
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/data/analytics
 ```
 
 ## InfluxDB version discovery & upgrades (Operations → InfluxDB Versions)
@@ -1396,9 +1427,9 @@ The honeypot/decoy runs **Core** and is managed separately: its own section show
 **cannot switch edition** — Core stays Core, Enterprise stays Enterprise.
 
 ```bash
-curl -X POST localhost:9800/api/isr/influx/versions/check   # enumerate + fetch notes
-curl 'localhost:9800/api/isr/influx/versions'
-curl 'localhost:9800/api/isr/influx/release-notes'
+curl -H "X-ISR-Admin-Session: $SESSION" -X POST localhost:9800/api/isr/influx/versions/check   # enumerate + fetch notes
+curl -H "X-ISR-Admin-Session: $SESSION" 'localhost:9800/api/isr/influx/versions'
+curl -H "X-ISR-Admin-Session: $SESSION" 'localhost:9800/api/isr/influx/release-notes'
 ```
 
 The **Cluster & Capacity → Cluster Nodes** view shows every node ISR manages —
@@ -1417,13 +1448,13 @@ Standing up a replication job's mutual TLS no longer means hand-pasting PEMs:
   for quick tests; swap in commercial certs any time.
 
 ```bash
-curl localhost:9800/api/isr/ca                       # CA cert + fingerprint (no private key)
-curl -X POST localhost:9800/api/isr/ca/issue \
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/ca                       # CA cert + fingerprint (no private key)
+curl -X POST localhost:9800/api/isr/ca/issue -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' \
   -d '{"common_name":"spoke-1","client_auth":true}'  # a client leaf + the CA
-curl -X POST localhost:9800/api/isr/ca/replication-bundle \
+curl -X POST localhost:9800/api/isr/ca/replication-bundle -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' -d '{"hub_url":"https://hub-b:8286"}'
-curl localhost:9800/api/isr/net/local-address        # detected host address for URL autofill
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/net/local-address        # detected host address for URL autofill
 ```
 
 The hub's mTLS write listener is enabled by env (`ISR_GATEWAY_TLS_LISTEN` +
@@ -1446,7 +1477,7 @@ a **Laura — compaction analysis** card (effect + fix + flags + evidence) with 
 metric/signal reference.
 
 ```bash
-curl localhost:9800/api/isr/laura/compaction
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/laura/compaction
 ```
 
 ## Real-time rolling node upgrades (Operations → InfluxDB Versions)
@@ -1461,9 +1492,9 @@ on the new image with no data movement. A **Simulate** toggle previews the whole
 without recreating containers.
 
 ```bash
-curl -X POST 'localhost:9800/api/isr/influx/upgrade?target=<cluster>' \
+curl -X POST 'localhost:9800/api/isr/influx/upgrade?target=<cluster>' -H "X-ISR-Admin-Session: $SESSION" \
   -H 'content-type: application/json' -d '{"tag":"influxdb:3.10.2-enterprise"}'   # &simulate=1 to preview
-curl 'localhost:9800/api/isr/influx/upgrade/status?target=<cluster>'              # live per-node status + data flow
+curl -H "X-ISR-Admin-Session: $SESSION" 'localhost:9800/api/isr/influx/upgrade/status?target=<cluster>'              # live per-node status + data flow
 ```
 
 ## Routing (Traffic & Routing → Routing)
@@ -1494,12 +1525,12 @@ copy-paste) before it goes live. See also **Docs → Guides → "Routing — poo
 policies & geo"**.
 
 ```bash
-curl localhost:9800/api/isr/policies
-curl -X PUT localhost:9800/api/isr/policies -H 'content-type: application/json' \
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/policies
+curl -X PUT localhost:9800/api/isr/policies -H 'content-type: application/json' -H "X-ISR-Admin-Session: $SESSION" \
   -d '{"name":"eu-tenant-reads","tier":"group","subject":"eu-team","enabled":true,
         "pool":"eu_query","pool_upstreams":["http://node-eu-a:8181","http://node-eu-b:8181"],
         "geo_pools":{"eu-west-1":["http://node-eu-a:8181"]}}'
-curl -X POST localhost:9800/api/isr/routing/simulate -H 'content-type: application/json' \
+curl -X POST localhost:9800/api/isr/routing/simulate -H 'content-type: application/json' -H "X-ISR-Admin-Session: $SESSION" \
   -d '{"user":"alice","query":"SELECT * FROM traffic.vehicle_events","execution_mode":"policy"}'
 ```
 
@@ -1511,11 +1542,11 @@ Deliver ISR alerts off-box through **Slack**, **email (SMTP)**, **incident.io**,
 validate a channel before saving. Secrets are write-only (shown as `••••••`).
 
 ```bash
-curl localhost:9800/api/isr/notify/config
-curl -X PUT localhost:9800/api/isr/notify/config -H 'content-type: application/json' \
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/notify/config
+curl -X PUT localhost:9800/api/isr/notify/config -H 'content-type: application/json' -H "X-ISR-Admin-Session: $SESSION" \
   -d '{"config":{"min_severity":"error","dedup":{"enabled":true,"window_secs":900},
         "channels":{"slack":{"enabled":true,"webhook_url":"https://hooks.slack.com/…"}}}}'
-curl -X POST localhost:9800/api/isr/notify/test -H 'content-type: application/json' -d '{"channel":"slack"}'
+curl -H "X-ISR-Admin-Session: $SESSION" -X POST localhost:9800/api/isr/notify/test -H 'content-type: application/json' -d '{"channel":"slack"}'
 ```
 
 ## Reporting to the ISR maintainers (Operations → ISR Updates)
@@ -1550,14 +1581,15 @@ leader-only exporter ships on the configured interval; **Test** pushes once befo
 saving. Secrets are write-only (`••••••` keeps the stored value).
 
 ```bash
-curl localhost:9800/api/isr/telemetry/catalog        # metric groups you can select
-curl localhost:9800/api/isr/telemetry/config
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/telemetry/catalog        # metric groups you can select
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/telemetry/config
 curl -X PUT localhost:9800/api/isr/telemetry/config -H 'content-type: application/json' \
   -d '{"config":{"enabled":true,"interval_seconds":60,
         "target":{"mode":"external","version":"v3","url":"http://influx:8086",
                   "v3_database":"isr_ops","v3_token":"…"},
         "metrics":["isr_requests","isr_resources","isr_security"]}}'
-curl -X POST localhost:9800/api/isr/telemetry/test -H 'content-type: application/json' -d '{}'
+curl -X POST localhost:9800/api/isr/telemetry/test -H "X-ISR-Admin-Session: $SESSION" \
+  -H 'content-type: application/json' -d '{"config":{ … the same object as above … }}'
 ```
 
 **Metrics & Logs Retention** (Operations → Metrics & Logs Retention) keeps
@@ -1569,12 +1601,12 @@ long-term store** (v1/v2/v3) that the same metrics/logs are dual-shipped to via 
 dashboard reads it — nothing is lost.
 
 ```bash
-curl localhost:9800/api/isr/retention/config
-curl -X PUT localhost:9800/api/isr/retention/config -H 'content-type: application/json' \
+curl -H "X-ISR-Admin-Session: $SESSION" localhost:9800/api/isr/retention/config
+curl -X PUT localhost:9800/api/isr/retention/config -H 'content-type: application/json' -H "X-ISR-Admin-Session: $SESSION" \
   -d '{"config":{"metrics_days":7,"logs_days":3,
         "remote":{"enabled":true,"version":"v3","url":"http://influx:8086",
                   "v3_database":"isr_longterm","v3_token":"…"}}}'
-curl -X POST localhost:9800/api/isr/retention/test -H 'content-type: application/json' -d '{"config":{"remote":{"enabled":true,"version":"v3","url":"http://influx:8086","v3_database":"isr_longterm","v3_token":"…"}}}'
+curl -H "X-ISR-Admin-Session: $SESSION" -X POST localhost:9800/api/isr/retention/test -H 'content-type: application/json' -d '{"config":{"remote":{"enabled":true,"version":"v3","url":"http://influx:8086","v3_database":"isr_longterm","v3_token":"…"}}}'
 ```
 
 

@@ -5,7 +5,7 @@ protocol, and write it into one or more InfluxDB 3 destinations — without
 standing the old server back up.
 
 ```bash
-curl -sS -X POST http://ISR_HOST:8090/api/isr/migration/backup/export \
+curl -sS -X POST http://ISR_HOST:9800/api/isr/migration/backup/export \
   -H "X-ISR-Admin-Session: $SESSION" -H 'content-type: application/json' -d '{
     "backup_dir": "mybackup",
     "database": "centralCounterStore",
