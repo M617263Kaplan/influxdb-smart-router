@@ -1,6 +1,6 @@
 # ISR — the InfluxDB Smart Router
 
-**Put an operations layer in front of InfluxDB 3 Enterprise, in about five minutes.**
+**Put an operations layer in front of InfluxDB 3 Enterprise, in minutes.**
 
 ISR is a single binary that sits in front of your InfluxDB 3 Enterprise cluster
 and turns it into something an operator can actually run: it routes and caches
@@ -109,7 +109,7 @@ It detects your architecture, pulls the matching release image, verifies the
 checksum, loads it, and starts the hub. When it finishes it **opens the console
 in your default browser** — you land on Getting Started without copying a URL.
 
-Current release: **ISR 4.0.6** — [release notes](https://github.com/M617263Kaplan/influxdb-smart-router/releases/tag/v4.0.6). Every
+Current release: **ISR 4.0.7** — [release notes](https://github.com/M617263Kaplan/influxdb-smart-router/releases/tag/v4.0.7). Every
 release, with its signed assets and how to verify them: [releases](https://github.com/M617263Kaplan/influxdb-smart-router/releases).
 
 It opens the browser only once the console has actually answered, so you never

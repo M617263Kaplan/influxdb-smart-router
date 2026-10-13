@@ -5,7 +5,7 @@ Every guide in this directory, by the question it answers. The console's own
 
 ## Installing and upgrading
 
-- [Release notes — ISR 4.0.6](https://github.com/M617263Kaplan/influxdb-smart-router/releases/tag/v4.0.6) — what this release improves, the assets it ships and how to verify them; [all releases](https://github.com/M617263Kaplan/influxdb-smart-router/releases).
+- [Release notes — ISR 4.0.7](https://github.com/M617263Kaplan/influxdb-smart-router/releases/tag/v4.0.7) — what this release improves, the assets it ships and how to verify them; [all releases](https://github.com/M617263Kaplan/influxdb-smart-router/releases).
 - [Running ISR on Kubernetes](install-kubernetes.md) — the Helm chart, loading the image into your cluster's runtime, encryption at rest, state backends and every value worth knowing.
 - [Deploying an ISR spoke on AWS](deploying-a-spoke-on-aws.md) — the Terraform bundle ISR emits for a regional spoke, and running it yourself.
 - [ISR and InfluxDB 3.11](influxdb-3.11.md) — what the 3.11 series changes for a cluster ISR runs.

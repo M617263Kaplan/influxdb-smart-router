@@ -8,9 +8,9 @@ description: >-
   kubectl with this release's ServiceAccount).
 type: application
 # Chart version, moves independently of ISR itself.
-version: 0.2.23
+version: 0.2.24
 # The ISR release this chart was written against and validated with; it bumps
 # with the product. Published images are arch-suffixed (vX.Y.Z-arm64 /
 # vX.Y.Z-amd64), so `image.tag` is required and this value is what the chart
 # suggests when it is missing (see _helpers.tpl).
-appVersion: "v4.0.6"
+appVersion: "v4.0.7"
