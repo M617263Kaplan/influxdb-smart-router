@@ -165,7 +165,9 @@ console.
 
 ## If the console shows "Bundle mode"
 
-That is the expected state, not a failure. A containerised hub ships without
-Terraform or cloud CLIs by design, so a toolchain check that reports them missing
-is reporting that the design is intact. Press **Generate bundle** and run it
-where your AWS session lives.
+That is the expected state when no cloud account has verified, not a failure.
+The hub applies a module itself only through a verified cloud account; with none
+on record it holds no credential it could act with, so the Provision page offers
+the bundle. Press **Generate bundle** and run it where your AWS session lives, or
+connect and verify a [cloud account](cloud-accounts.md) and the same page will
+apply the module from the hub.
