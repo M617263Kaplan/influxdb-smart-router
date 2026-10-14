@@ -22,6 +22,7 @@ Every guide in this directory, by the question it answers. The console's own
 - [Ingest Gateway](ingest-gateway.md) — Prometheus, OTLP, Datadog, Graphite, StatsD, collectd and Loki writers landing as line protocol.
 - [Migration readiness — the dry run](migration-readiness.md) — what a migration will do before it does it.
 - [Migrating from an InfluxDB 1.x portable backup](backup-file-migration.md) — expanding a portable backup straight into InfluxDB 3.
+- [Importing a directory of line-protocol files](line-protocol-import.md) — a folder of `influx export` files discovered, imported as a tracked job, and verified by a row count on the target.
 - [ISR Cross-Cloud Migration & Replication — Admin Validation Runbook](cross-cloud-validation-runbook.md) — proving a replication or migration end to end.
 - [IoT mirrors: delivery, evidence, and what a bounded buffer costs](iot-mirror-assurance.md) — mirrored device writes and how to read their evidence.
 

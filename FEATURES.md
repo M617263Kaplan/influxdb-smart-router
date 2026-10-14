@@ -222,6 +222,11 @@ Point ISR at an InfluxDB 1.x portable backup on disk and it streams straight int
 
 **Compelling because:** no old cluster to resurrect. See [Migrating from a backup](docs/backup-file-migration.md).
 
+### Import a directory of line-protocol files
+Point the wizard at a folder of `influx export` files under the import root. ISR discovers the databases, tables and point counts, refuses to start with nothing to import, writes in batches through its own path as a job with a status you can follow, and ends by counting the rows on the target.
+
+**Compelling because:** an export you already have becomes an InfluxDB 3 database with parity shown, not assumed. See [Importing line-protocol files](docs/line-protocol-import.md).
+
 ### Migration readiness
 A metadata-only dry run that says what a migration will do before it does it.
 

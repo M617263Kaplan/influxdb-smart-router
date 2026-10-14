@@ -78,6 +78,7 @@ that is worth to you. The [README](../README.md) has the long form, the
 | Multi-protocol ingest gateway | Prometheus remote write, OTLP, Datadog, Graphite, StatsD, collectd and Loki land as line protocol; v1 and v2 clients speak to a v3 cluster. | Every writer you already have reaches InfluxDB 3 unchanged. See [Ingest Gateway](ingest-gateway.md). |
 | Flight SQL | Arrow Flight SQL is terminated at ISR, with the same tokens, scopes and policies as HTTP. | Grafana, ADBC and JDBC clients get governed access, not a tunnel. |
 | Migration from a 1.x backup | Point ISR at an InfluxDB 1.x portable backup on disk and it streams into InfluxDB 3. | No old cluster to resurrect. See [Migrating from a backup](backup-file-migration.md). |
+| Line-protocol file import | A folder of `influx export` files is discovered, imported as a tracked job, and verified by a row count on the target. | An export you already have becomes a database, with parity shown. See [Importing line-protocol files](line-protocol-import.md). |
 | Migration readiness | A dry run that says what a migration will do before it does it. | Conflicts found before the first row moves. See [Migration readiness](migration-readiness.md). |
 | Edge Data Replication receiver | An OSS 2.x edge replicates through ISR into the database you pick. | Bring edges into InfluxDB 3 without touching the edge. |
 | Backfill and Cloud Copy | Move history into a new cluster, or copy an adopted cloud database. | The past comes along. |
