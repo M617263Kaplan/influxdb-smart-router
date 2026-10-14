@@ -507,12 +507,14 @@ flowchart TB
 | Tags | only the `region` and `host` tag keys |
 | Query protocols | HTTP only, or FlightSQL too |
 
-Tables, fields and tags are allow-lists of names: a token may reference what is
-listed and nothing else, across every row. Writes are checked against them
-always; queries are checked when the token's **Enforce on queries** switch is on,
-and an empty list leaves that dimension unrestricted. Row-level separation — one
-tenant's region, one customer's devices — is done with one database per tenant,
-which the database scope enforces on every path.
+Tables, fields and tags are allow-lists of names. Writes are checked against
+them always. Queries are checked when the token's **Enforce on queries** switch
+is on: ISR reads each statement and refuses one that reaches a table, field or
+tag outside the lists, or one it cannot read. An empty list leaves that
+dimension unrestricted. Treat the lists as a guard on well-behaved clients, and
+use one database per tenant for the separation that must hold — one tenant's
+region, one customer's devices — because the database scope is enforced on
+every path and every row.
 
 **Why this is powerful:**
 
