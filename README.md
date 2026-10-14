@@ -7,6 +7,9 @@ and turns it into something an operator can actually run: it routes and caches
 queries, scales nodes against your licence, quarantines abusive traffic, moves
 data in and out of anywhere, and explains every decision it makes in words.
 
+Short on time? [ISR at a glance](docs/features.md) is every feature in one
+page, with what each one is worth to you.
+
 ---
 
 ## 1. What is ISR, and why does it feel like cheating?
@@ -599,10 +602,10 @@ workspaces in depth, the admin API, and per-feature configuration.
 
 ## Upgrading
 
-Config (admins, tokens, policies, pools, runtime flags) lives in an embedded
-SQLite database in the `isr-state` volume — **not** in the
-container itself — so upgrading is swapping the container while keeping that
-volume, not a data migration:
+Config (admins, tokens, policies, pools, runtime flags) lives in ISR's state
+database in the `isr-state` volume — **not** in the container itself — so
+upgrading is swapping the container while keeping that volume, not a data
+migration:
 
 ```bash
 # 1. Optional but recommended: snapshot current config first (Admin & Docs →
@@ -624,12 +627,12 @@ docker run -d --name isr \
   isr:v<new-version>-arm64   # or -amd64
 
 # 3. Verify: console loads, admins/tokens/pools are all still there, and
-#    `docker logs isr` shows no SQLite errors on startup.
+#    `docker logs isr` shows no state-database errors on startup.
 ```
 
 InfluxDB node containers and their data are untouched by this — only the
-`isr` control-plane container is recreated. Schema changes to the embedded
-SQLite state are additive, so an in-place upgrade doesn't lose or corrupt
+`isr` control-plane container is recreated. Schema changes to the
+state database are additive, so an in-place upgrade doesn't lose or corrupt
 existing config.
 
 **Rolling back:** keep the previous version's image loaded (`docker images`)
@@ -876,7 +879,7 @@ Postgres** on every change. A newly-promoted leader **hydrates** them on
 promotion — checkpoints merge monotonically (a hydrated watermark never moves
 progress backwards) — so a failover resumes exactly where the previous leader
 left off instead of silently halting or re-shipping from the beginning. Without
-a state DSN the local SQLite copy is authoritative and nothing changes.
+a state DSN the local state copy is authoritative and nothing changes.
 `/_admin/ready` reports `replication_store: ha-backed` vs `local-only`.
 
 ### Lowest latency: write-time tee (`mode: "tee"`)
@@ -1086,80 +1089,29 @@ raises a `replication_verify_failed` alert rather than blocking. Summary at
   served there — native writes, Prometheus/Graphite/OTLP, and queries — is then
   authenticated by client certificate.
 
-## Request hardening
+## Request hardening and resource safety
 
-- **Decompression-bomb guard** — compressed request bodies (gzip/deflate on the
-  write path and gateway) are inflated with a hard ceiling. A body that expands
-  past `ISR_MAX_DECOMPRESSED_BYTES` (default **1 GiB**) is rejected with `413`
-  instead of being allowed to allocate until the process OOMs.
-- **Constant-time secret comparison** — token/credential checks (kill-switch
-  allow-list, management-channel HMAC, federation digests, admin password hashes)
-  compare in constant time so a timing side-channel can't be used to recover a
-  secret byte-by-byte.
+ISR ships defaults that shed load and recover rather than exhaust the host, and
+every limit is a setting:
 
-## Resource safety (safe-by-default envelope)
+| Limit | Default | What a client sees when it is reached |
+| :-- | :-- | :-- |
+| Decompressed request body (`ISR_MAX_DECOMPRESSED_BYTES`) | 1 GiB | `413` |
+| Requests in flight | 1024 | `503`, shed rather than queued |
+| Request-body bytes in flight (`ISR_MAX_INFLIGHT_BYTES`) | 512 MiB | `503`, shed rather than queued |
+| Upstream response size (`ISR_MAX_RESPONSE_BYTES`) | 512 MiB | `502` |
+| Durable write queue | 500,000 entries / 512 MiB | backpressure before the disk fills; `0` lifts the cap |
+| Free space on the state volume (`ISR_DISK_MIN_FREE_BYTES`) | 512 MiB | queued writes refused and `/_admin/ready` reports `disk_state_volume` |
 
-ISR ships defaults that shed load and recover rather than exhaust the host:
-
-- **Bounded admission (count + bytes)** — the in-flight request semaphore defaults
-  to **1024** permits, capping concurrency (task/FD pressure). On top of
-  that, **byte-weighted admission** holds permits equal to each request's decoded
-  body size against an `ISR_MAX_INFLIGHT_BYTES` budget (default **512 MiB**), so the
-  total request-body memory in flight is bounded regardless of request count — a
-  flood of large bodies is shed with `503` once the byte budget is spent, even
-  while request slots remain. Both caps shed rather than queue.
-- **Bounded response buffering** — an upstream response larger than
-  `ISR_MAX_RESPONSE_BYTES` (default **512 MiB**) — by declared `Content-Length` or
-  measured mid-stream — is rejected with `502` instead of buffered unbounded.
-- **Finite write queue** — the durable write queue defaults to **500,000 entries /
-  512 MiB**, so an extended ingest outage applies backpressure
-  before it can exhaust the disk or OOM on startup load. Set `0` for the legacy
-  unlimited behavior, or raise it, in the write-queue capacity settings.
-- **Crash-durable write queue** — each queued write is `fsync`'d (survives host
-  power loss, not just a process crash; opt out with `ISR_WRITE_QUEUE_FSYNC=0`),
-  compaction replaces the file via an **atomic rename** (a crash mid-compaction
-  can't corrupt or truncate the backlog), and recovery **streams** the file line
-  by line (no whole-file load) and **isolates** a torn/corrupt entry instead of
-  aborting the whole recovery.
-- **Disk-aware backpressure** — before appending a queued write, ISR checks free
-  space on the state volume and **refuses the write** (backpressure) if it would
-  drop below `ISR_DISK_MIN_FREE_BYTES` (default 512 MiB, reserving headroom for
-  SQLite/WAL/compaction) — so a filling disk can't cause an `ENOSPC` torn write or
-  a corrupt state DB. The same watermark drives the `/_admin/ready`
-  `disk_state_volume` check, so readiness and enqueue back off together.
-- **Graceful shutdown** — on `SIGTERM`/`SIGINT` the control-plane and data-plane
-  servers stop accepting new connections and drain in-flight requests.
-- **Supervised background loops** — the always-on loops (query calibration,
-  maintenance sweep, audit-retention sweep, and the replication runner) run under a
-  supervisor that logs and restarts them with backoff if one exits or panics — a
-  wedged loop can't vanish silently while the process stays "healthy".
-- **Scheduled audit retention** — the audit/journal retention sweep runs on a
-  timer (`sweep_hours`, reloaded each cycle), so the SQLite audit tables can't
-  grow unbounded until an operator intervenes.
-- **Resource-pressure observability** — `GET /api/isr/resource-health` reports open
-  file descriptors vs the soft limit, free/total bytes on the state volume, the
-  response-cache and write-queue byte usage vs their budgets, and admission
-  headroom — with a `pressure[]` list of active warnings. `/_admin/ready`
-  additionally fails on a low disk watermark (`ISR_DISK_MIN_FREE_BYTES`, default
-  512 MiB) and warns on high FD utilization, so disk-full and descriptor exhaustion
-  are alertable **before** they take the proxy down.
-- **Image liveness** — the container image ships a `HEALTHCHECK` against `/health`.
-- **Kubernetes envelope** — the generated Deployment includes CPU/memory
-  requests+limits, `startup`/`liveness` (`/health`) and `readiness`
-  (`/_admin/ready`) probes, and a 30s termination grace period.
-- **Bounded in-memory maps** — the response cache has an aggregate budget
-  (`ISR_CACHE_MAX_ENTRIES` = 10,000, `ISR_CACHE_MAX_BYTES` = 256 MiB) with
-  soonest-to-expire eviction; the rate-limiter tracks at most
-  `ISR_RATE_LIMIT_MAX_KEYS` (100,000) source windows; and a 60s maintenance sweep
-  drops expired cache entries, idle rate-limit windows, and stale badness-tracker
-  keys — so no per-source map can grow without bound under adversarial key churn.
-- **Trusted-proxy source identity** — `X-Forwarded-For` / `X-Real-IP` are honored
-  **only** when the immediate TCP peer is in `ISR_TRUSTED_PROXIES` (comma-separated
-  IPs or IPv4 CIDRs). This stops a client from spoofing its source to evade
-  rate-limits/blocklists or balloon per-source maps.
-  The default (`ISR_TRUSTED_PROXIES` unset) trusts **none**, so the real TCP peer
-  is used. If ISR runs behind a load balancer or ingress, set
-  `ISR_TRUSTED_PROXIES` to your proxy's IPs/CIDRs to keep seeing real client IPs.
+Secrets are compared in constant time. Queued writes are durable across a host
+power loss, not only a process restart (`ISR_WRITE_QUEUE_FSYNC=0` opts out), and
+a damaged queue entry is isolated on recovery rather than aborting the replay.
+On `SIGTERM` the control and data planes stop accepting connections and drain
+what is in flight. Background work runs supervised and restarts with backoff,
+and the audit journals are trimmed on a timer (`sweep_hours`) so they cannot
+grow without bound. `GET /api/isr/resource-health` reports open file
+descriptors against the limit, free space on the state volume, and the
+in-flight budget in use.
 
 ## Federated read across the fleet
 

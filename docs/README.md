@@ -3,6 +3,10 @@
 Every guide in this directory, by the question it answers. The console's own
 **Docs** workspace carries the same material next to the page it describes.
 
+## Start here
+
+- [ISR at a glance: every feature, and why it matters](features.md) — the one-page tour: what each feature does and what it is worth to you.
+
 ## Installing and upgrading
 
 - [Release notes — ISR 4.0.10](https://github.com/M617263Kaplan/influxdb-smart-router/releases/tag/v4.0.10) — what this release improves, the assets it ships and how to verify them; [all releases](https://github.com/M617263Kaplan/influxdb-smart-router/releases).
