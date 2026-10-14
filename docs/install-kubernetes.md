@@ -18,7 +18,7 @@ volume, and nodes that serve through ISR as soon as their pods are ready.
 ## Load the image
 
 ISR images are distributed as release tarballs and tagged per architecture
-(`isr:v4.0.7-arm64`, `isr:v4.0.7-amd64`). Download the tarball for your nodes
+(`isr:v4.0.8-arm64`, `isr:v4.0.8-amd64`). Download the tarball for your nodes
 from the [release](https://github.com/M617263Kaplan/influxdb-smart-router/releases/latest),
 load it into Docker, then put it where the kubelet looks.
 
@@ -28,17 +28,17 @@ Kubernetes does not read Docker's image store. Docker Desktop's Kubernetes runs
 containerd, in the `k8s.io` namespace:
 
 ```bash
-docker load < isr-v4.0.7-linux-arm64-image.tar.gz
-docker save isr:v4.0.7-arm64 | docker exec -i desktop-control-plane ctr -n k8s.io images import -
+docker load < isr-v4.0.8-linux-arm64-image.tar.gz
+docker save isr:v4.0.8-arm64 | docker exec -i desktop-control-plane ctr -n k8s.io images import -
 ```
 
 Other distributions have a first-class equivalent:
 
 | distribution | command |
 |---|---|
-| kind | `kind load docker-image isr:v4.0.7-arm64` |
-| minikube | `minikube image load isr:v4.0.7-arm64` |
-| k3s / k3d | `k3d image import isr:v4.0.7-arm64` |
+| kind | `kind load docker-image isr:v4.0.8-arm64` |
+| minikube | `minikube image load isr:v4.0.8-arm64` |
+| k3s / k3d | `k3d image import isr:v4.0.8-arm64` |
 | anything else | push to a registry the cluster can pull from, and set `image.repository` |
 
 In production, use a registry: an image imported by hand does not survive a
@@ -56,7 +56,7 @@ kubectl -n isr create secret generic isr-encryption \
   --from-literal=key="$(openssl rand -base64 32)"
 
 helm install isr ./charts/isr -n isr \
-  --set image.tag=v4.0.7-arm64 \
+  --set image.tag=v4.0.8-arm64 \
   --set encryption.existingSecret=isr-encryption
 
 kubectl -n isr port-forward svc/isr 9800:9800
@@ -136,7 +136,7 @@ persistent volume at `/var/lib/isr`, and the readiness probe on
 `/_admin/ready`. Render it to see the objects:
 
 ```bash
-helm template isr ./charts/isr --set image.tag=v4.0.7-arm64 \
+helm template isr ./charts/isr --set image.tag=v4.0.8-arm64 \
   --set encryption.existingSecret=isr-encryption
 ```
 
