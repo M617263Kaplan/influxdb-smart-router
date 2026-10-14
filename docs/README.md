@@ -20,6 +20,11 @@ Every guide in this directory, by the question it answers. The console's own
 - [ISR Cross-Cloud Migration & Replication — Admin Validation Runbook](cross-cloud-validation-runbook.md) — proving a replication or migration end to end.
 - [IoT mirrors: delivery, evidence, and what a bounded buffer costs](iot-mirror-assurance.md) — mirrored device writes and how to read their evidence.
 
+## Securing access
+
+- [Scoped tokens and the Enforce on queries switch](scoped-tokens.md) — what each scope restricts, when the table, field and tag lists apply to queries, what is checked on each protocol, and what a refused client sees.
+- [Schema registry: declared data contracts](schema-registry.md) — what a contract declares, the accepted field types, what it does and does not govern, and how to change one producers will feel.
+
 ## Operating
 
 - [Command Center (Monitor → Data Flow)](command-center.md) — the whole platform on one canvas.

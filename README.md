@@ -514,7 +514,9 @@ tag outside the lists, or one it cannot read. An empty list leaves that
 dimension unrestricted. Treat the lists as a guard on well-behaved clients, and
 use one database per tenant for the separation that must hold — one tenant's
 region, one customer's devices — because the database scope is enforced on
-every path and every row.
+every path and every row. [Scoped tokens](docs/scoped-tokens.md) walks through
+the switch, what is checked on each protocol, and how a change to a token takes
+effect.
 
 **Why this is powerful:**
 
