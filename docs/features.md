@@ -9,7 +9,7 @@ every day without changing the engine, and it explains every decision it makes:
 every routing choice, scaling action and refused query carries the reasoning
 that produced it.
 
-This page is the short tour. Each feature is one row: what it does, and what
+This page is the short tour; [FEATURES.md](../FEATURES.md) is the full list with what makes each feature compelling. Each feature is one row: what it does, and what
 that is worth to you. The [README](../README.md) has the long form, the
 [docs index](README.md) has the how-to for each area, and
 [install in minutes](../README.md#2-get-started-in-five-minutes) is one command.

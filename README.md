@@ -8,7 +8,8 @@ queries, scales nodes against your licence, quarantines abusive traffic, moves
 data in and out of anywhere, and explains every decision it makes in words.
 
 Short on time? [ISR at a glance](docs/features.md) is every feature in one
-page, with what each one is worth to you.
+page, and [FEATURES.md](FEATURES.md) is the full list with what makes each one
+compelling.
 
 ---
 

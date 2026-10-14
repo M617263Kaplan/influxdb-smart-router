@@ -6,6 +6,7 @@ Every guide in this directory, by the question it answers. The console's own
 ## Start here
 
 - [ISR at a glance: every feature, and why it matters](features.md) — the one-page tour: what each feature does and what it is worth to you.
+- [ISR features, and what makes each one compelling](../FEATURES.md) — the full list, grouped by area, each with the reason it earns its place.
 
 ## Installing and upgrading
 
