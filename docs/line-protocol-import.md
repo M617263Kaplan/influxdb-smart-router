@@ -32,6 +32,11 @@ Replication & Migration → Migration → **Migration wizard**:
    own target.
 3. Review, then **Start migration**.
 
+To import into a fleet spoke, choose the spoke as the ISR in the target step,
+or start from the spoke's control card with **Migrate data into this spoke…**.
+The files are read from the spoke's import root and written to the spoke's
+cluster; the hub only relays the job.
+
 Before anything is written the wizard shows what it found: databases, tables,
 points and files. With nothing to import it says so and does not start. Once
 started, the message follows the job: points written against points
