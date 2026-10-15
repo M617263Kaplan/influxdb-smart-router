@@ -20,13 +20,74 @@ it. Nothing needs configuring.
 
 The store keeps the name `isr-minio` and port 9000 on the cluster network
 whatever runs in it, so clusters and nodes created earlier keep finding it.
-Provisioning answers with the engine and image it chose, and Operations →
+Provisioning answers with the engine and image it chose, and Monitor →
 Object Store shows the store's health.
 
 On Kubernetes, ISR creates the store inside each cluster's namespace on a
 PersistentVolumeClaim: RustFS for a new namespace, and the MinIO store a
 namespace was created with for one made by an earlier release. See
 [Running ISR on Kubernetes](install-kubernetes.md).
+
+## Encrypting the link to the store
+
+Every write-ahead log, Parquet file and catalogue change a node writes travels
+to the object store. **Security → Cluster TLS, Step 5** encrypts that link for
+every cluster on the host in one switch:
+
+- ISR issues the store a certificate from the same authority that signs your
+  node certificates, and restarts the store on HTTPS. Its data, credentials and
+  server stay as they were.
+- ISR then recreates each node on the store, one at a time and compactor last,
+  trusting that authority and with plain HTTP switched off, so no node can fall
+  back to an unencrypted connection.
+- ISR's write queue holds writes that arrive while the store restarts and
+  delivers them when it is back.
+- **Verify** checks the result the way a client would: trusting only ISR's
+  authority the store answers; trusting only public roots, or over plain HTTP,
+  it refuses; and every node is checked for its settings.
+- Nodes added later, by scaling, an upgrade or a Cluster TLS change, start on
+  HTTPS too.
+
+**Turn off encryption** reverses it the same way. To start a new install with
+the link already encrypted, set `ISR_OBJECT_STORE_TLS=on` on the ISR container
+before the store is first provisioned.
+
+This applies to the store ISR runs on Docker, with InfluxDB 3 Enterprise 3.10.3
+or later on every node; ISR checks each node's image before it switches. If a
+container ISR did not launch uses the store, the switch stops and names it:
+recreate that container yourself afterwards with `isr-ca.crt` named by
+`INFLUXDB3_OBJECT_STORE_TLS_CA`, or pass `{"force": true}` to
+`POST /api/isr/object-store-tls/enable`.
+
+## Watching the store
+
+**Monitor → Object Store** opens with a Store card: the server and its
+version, its drives, capacity with a time-to-full, healing, objects and
+per-bucket usage. ISR reads them from RustFS or MinIO every minute with the
+credentials it provisioned the store with. VersityGW and a store you bring are
+checked for reachability; their request traffic is in the node counters below
+the card.
+
+| Condition | Alert |
+| :-- | :-- |
+| The store does not answer | Critical, until it does |
+| The store answers but reports itself not ready (it gives the reasons) | Warning |
+| A drive is not healthy or is offline | Error |
+| A drive is 80% full | Warning |
+| A drive is 90% full, or will be full within a day at the current rate | Error |
+| Fewer than 5% of a drive's inodes are free | Warning |
+| Healing has run for more than 30 minutes | Warning |
+| The drives' error counters are rising | Warning |
+| ISR cannot read the store's health | Warning |
+
+Each alert resolves on its own when the condition clears. A store ISR restarts
+on purpose, for example while encrypting the link, raises nothing.
+
+Request latency comes from the nodes' own measurements: GET and PUT at the
+50th and 95th percentile, and time to first byte, over the last five minutes.
+The Command Center's storage view shows PUT p95, GET p95 and the errors of the
+last hour, and ISR's `/metrics` exports `isr_objectstore_*` for your own
+dashboards.
 
 ## Choosing the server yourself
 

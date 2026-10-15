@@ -76,6 +76,11 @@ Blocked or abusive traffic is not refused; it is answered slowly by a decoy serv
 
 **Compelling because:** a scanner that would find a refusal in milliseconds and move on instead burns minutes on data that was never real. Your cluster never sees the request, every second is attributed, and the decoy is a dead end by construction.
 
+### Encrypted object-store link
+One switch, Security → Cluster TLS → Step 5, puts the link between every node and the object store on HTTPS: a certificate for the store from ISR's own CA, each node moved onto it one at a time with plain HTTP switched off, writes held while the store restarts, and a Verify that checks the store refuses anyone who does not trust that CA.
+
+**Compelling because:** every write-ahead log and Parquet file a node writes now travels encrypted, with no PKI to build, and no node can fall back to plain HTTP.
+
 ### Mutual TLS, built-in CA
 mTLS listeners for the data plane and for replication, with certificates issued and rotated from ISR's own CA, and a one-click bundle for a replication peer.
 
@@ -265,6 +270,11 @@ One durable journal of what ISR's own subsystems did, across hub and spokes, dis
 Slack, email, PagerDuty and incident.io, with the reasoning and the remediation attached to each alert.
 
 **Compelling because:** an alert tells you what to do, not just that something is red.
+
+### Object store monitoring
+The store itself, read every minute: drives, capacity and time-to-full, healing, readiness and per-bucket usage, with GET and PUT latency from the nodes. Alerts fire at 80% and 90% full, for a drive that is not healthy, and for a store that is up but not ready, each with the store's own reasons. See [Watching the store](docs/object-store.md#watching-the-store).
+
+**Compelling because:** a filling disk or a failing drive is seen a day ahead, not when the first write fails.
 
 ### Connectivity and authentication alerting
 Unreachable nodes, object stores and failing credentials raise alerts that resolve when the subject recovers.
