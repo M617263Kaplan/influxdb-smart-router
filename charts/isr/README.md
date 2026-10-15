@@ -10,13 +10,13 @@ per cluster.
 ## The image
 
 ISR images are **not in a registry**. They are distributed as release
-tarballs and tagged per arch (`isr:v4.0.14-arm64` / `isr:v4.0.14-amd64`).
+tarballs and tagged per arch (`isr:v4.0.15-arm64` / `isr:v4.0.15-amd64`).
 Load one into your cluster runtime first — on Docker Desktop the node runs
 containerd, so the image has to be imported into it, not just into Docker:
 
 ```bash
-kind load docker-image isr:v4.0.14-arm64        # kind
-docker save isr:v4.0.14-arm64 | docker exec -i desktop-control-plane \
+kind load docker-image isr:v4.0.15-arm64        # kind
+docker save isr:v4.0.15-arm64 | docker exec -i desktop-control-plane \
   ctr -n k8s.io images import -                # Docker Desktop
 # or push to a registry you control and point image.repository at it
 ```
@@ -33,7 +33,7 @@ kubectl create secret generic isr-encryption \
   --from-literal=key="$(openssl rand -base64 32)"
 
 helm install isr ./charts/isr \
-  --set image.tag=v4.0.14-arm64 \
+  --set image.tag=v4.0.15-arm64 \
   --set encryption.existingSecret=isr-encryption
 kubectl port-forward svc/isr 9800:9800
 ```
