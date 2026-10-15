@@ -1,9 +1,9 @@
 # Default values for the ISR control-plane chart.
 #
 # THE IMAGE IS NOT IN A REGISTRY. ISR images are distributed as release
-# tarballs (docker load) and tags are arch-suffixed: isr:v4.0.13-arm64,
-# isr:v4.0.13-amd64. Load the image into your cluster's runtime (e.g.
-# `kind load docker-image isr:v4.0.13-arm64`) or push it to a registry you
+# tarballs (docker load) and tags are arch-suffixed: isr:v4.0.14-arm64,
+# isr:v4.0.14-amd64. Load the image into your cluster's runtime (e.g.
+# `kind load docker-image isr:v4.0.14-arm64`) or push it to a registry you
 # control, then set image.repository/image.tag accordingly.
 image:
   repository: isr
