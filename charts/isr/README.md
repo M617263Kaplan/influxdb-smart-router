@@ -98,7 +98,7 @@ so the UDP port is only published when a listener exists behind it.
 
 ## What this chart deliberately does not do
 
-- No Docker socket: the docker orchestrator, MinIO-via-docker provisioning
+- No Docker socket: the docker orchestrator, Docker-provisioned object store
   and self-upgrade paths that need `/var/run/docker.sock` don't apply in a
   pod. Nodes go through the k8s driver instead.
 - No Ingress: bring your own, or use ISR's own TLS termination above.

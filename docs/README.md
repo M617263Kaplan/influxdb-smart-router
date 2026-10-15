@@ -15,6 +15,7 @@ Every guide in this directory, by the question it answers. The console's own
 - [Deploying an ISR spoke on AWS](deploying-a-spoke-on-aws.md) — the Terraform bundle ISR emits for a regional spoke, and running it yourself.
 - [ISR and InfluxDB 3.11](influxdb-3.11.md) — what the 3.11 series changes for a cluster ISR runs.
 - [The provisioning engine](provisioning-engine.md) — how ISR provisions cloud spokes with OpenTofu, shipped inside the image.
+- [The object store behind your cluster](object-store.md) — the store ISR runs for you, choosing another server (including MinIO AIStor with your licence), and bringing your own.
 - [Cloud accounts](cloud-accounts.md) — connecting AWS, Google Cloud and Azure so ISR can deploy and adopt there.
 
 ## Getting data in

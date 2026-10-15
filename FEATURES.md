@@ -28,7 +28,7 @@ Contents: [Getting running](#getting-running) · [Access and security](#access-a
 **Compelling because:** the console is open, a cluster is adopted and the first database exists inside a few minutes, with nothing else to assemble, and you know the bytes you ran are the bytes that were published.
 
 ### Provision, or adopt what you have
-ISR launches and scales InfluxDB 3 Enterprise nodes for you, with MinIO or your own S3, Blob or GCS behind them. It also adopts a cluster you already run, and InfluxDB 3 Cloud or Cloud Dedicated instances, using each instance's own token for every data-plane operation.
+ISR launches and scales InfluxDB 3 Enterprise nodes for you, with a managed S3-compatible store or your own S3, Blob or GCS behind them. It also adopts a cluster you already run, and InfluxDB 3 Cloud or Cloud Dedicated instances, using each instance's own token for every data-plane operation.
 
 **Compelling because:** you keep the cluster you have and the way you built it; ISR takes over the operating of it, not the owning of it.
 

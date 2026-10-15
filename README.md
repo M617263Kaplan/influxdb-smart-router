@@ -185,7 +185,8 @@ kubectl -n isr port-forward svc/isr 9800:9800
 ```
 
 ISR then provisions InfluxDB clusters into the same Kubernetes cluster from
-Getting Started — one namespace per cluster, MinIO on a persistent volume.
+Getting Started — one namespace per cluster, an S3-compatible object store on a
+persistent volume.
 Loading the image into your cluster's runtime and every value worth knowing:
 [docs/install-kubernetes.md](docs/install-kubernetes.md).
 
@@ -674,8 +675,8 @@ deploy success card.
 
 **Cloud object store.** Cloud spokes are handed AWS access to their own
 object-store bucket via an EC2 **IAM instance profile**, scoped to buckets
-named `isr-*`. The wizard's object-store step defaults to **S3** — not local
-MinIO — whenever the target is a cloud spoke, with the bucket/region
+named `isr-*`. The wizard's object-store step defaults to **S3** — not the local
+managed store — whenever the target is a cloud spoke, with the bucket/region
 pre-filled and no credential fields required.
 
 ## Fleet (hub-spoke)

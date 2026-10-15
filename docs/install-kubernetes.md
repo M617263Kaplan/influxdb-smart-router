@@ -3,8 +3,8 @@
 ISR runs on Kubernetes as a Deployment installed from the Helm chart in
 [`charts/isr`](../charts/isr). With node management on (the default), ISR
 provisions InfluxDB 3 Enterprise clusters into the same Kubernetes cluster
-through its API and console: one namespace per cluster, MinIO on a persistent
-volume, and nodes that serve through ISR as soon as their pods are ready.
+through its API and console: one namespace per cluster, an S3-compatible object
+store on a persistent volume, and nodes that serve through ISR as soon as their pods are ready.
 
 ---
 
@@ -78,13 +78,14 @@ the pod starts.
 
 Choose the Kubernetes target in Getting Started. ISR creates a namespace named
 `isr-<cluster>` holding the licence and admin-token Secrets, one Deployment and
-Service per node mode, and MinIO as the cluster's object store on a
-PersistentVolumeClaim. Getting Started reports the cluster licensed and serving
+Service per node mode, and the cluster's object store (RustFS) on a
+PersistentVolumeClaim. A namespace created by an earlier release keeps the
+MinIO store it was created with. Getting Started reports the cluster licensed and serving
 from the pods themselves, and the nodes join ISR's routing pool the moment
 they are ready — the next steps (database, first token, first write) run
 against them through ISR.
 
-The MinIO volume is 20Gi on the cluster's default StorageClass. Set its size
+The object-store volume is 20Gi on the cluster's default StorageClass. Set its size
 or class through the chart's `extraEnv`:
 
 ```yaml

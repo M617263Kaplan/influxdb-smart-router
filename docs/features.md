@@ -19,7 +19,7 @@ that is worth to you. The [README](../README.md) has the long form, the
 | Feature | What it does | Why it matters |
 | :-- | :-- | :-- |
 | One-command install | `install-mac.sh`, `install-linux.sh` or `install-windows.ps1` brings up ISR on Docker Desktop or Docker Engine; a Helm chart does the same on Kubernetes. | Console open, cluster adopted and first database created inside a few minutes, with nothing else to assemble. |
-| Provision or adopt | ISR launches and scales InfluxDB 3 Enterprise nodes for you, with MinIO or your own S3, Blob or GCS behind them, or adopts a cluster you already run, including InfluxDB 3 Cloud and Cloud Dedicated. | You keep the cluster you have; ISR takes over the operating of it. |
+| Provision or adopt | ISR launches and scales InfluxDB 3 Enterprise nodes for you, with a managed S3-compatible store or your own S3, Blob or GCS behind them, or adopts a cluster you already run, including InfluxDB 3 Cloud and Cloud Dedicated. | You keep the cluster you have; ISR takes over the operating of it. |
 | Getting Started wizard | A guided first run: administrator account, licence, cluster, database with retention, first token. | The first hour is a checklist, not a search. |
 | Signed releases and in-app update | Every release ships a signed checksum manifest; the installers and the console's Update now verify it before loading an image. | You know what you are running, and upgrading is a button that keeps your state. |
 
