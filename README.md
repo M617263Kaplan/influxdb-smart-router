@@ -2,6 +2,13 @@
 
 **Put an operations layer in front of InfluxDB 3 Enterprise, in minutes.**
 
+> **Notice — MinIO object store (October 2026).** The MinIO image published on
+> Docker Hub has changed, so ISR currently cannot pull MinIO when it sets up an
+> object store for you. An update to the installers and ISR is coming shortly.
+> Until then, bring your own S3, Azure Blob or Google Cloud Storage bucket when
+> ISR asks for an object store. Installations that are already running MinIO
+> are not affected.
+
 ISR is a single binary that sits in front of your InfluxDB 3 Enterprise cluster
 and turns it into something an operator can actually run: it routes and caches
 queries, scales nodes against your licence, quarantines abusive traffic, moves
