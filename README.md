@@ -167,15 +167,19 @@ nodes. Prefer a least-privilege socket proxy? ISR supports it.
 ### Kubernetes, with Helm
 
 ```bash
-git clone https://github.com/M617263Kaplan/influxdb-smart-router.git && cd influxdb-smart-router
+helm repo add isr https://m617263kaplan.github.io/influxdb-smart-router && helm repo update
 kubectl create namespace isr
 kubectl -n isr create secret generic isr-encryption \
   --from-literal=key="$(openssl rand -base64 32)"
-helm install isr ./charts/isr -n isr \
+helm install isr isr/isr -n isr \
   --set image.tag=v<version>-arm64 \
   --set encryption.existingSecret=isr-encryption
 kubectl -n isr port-forward svc/isr 9800:9800
 ```
+
+The chart ships with every release, as a signed release asset and in the Helm
+repository above; the [Kubernetes guide](docs/install-kubernetes.md) has the
+full walk-through.
 
 ISR then provisions InfluxDB clusters into the same Kubernetes cluster from
 Getting Started — one namespace per cluster, an S3-compatible object store on a

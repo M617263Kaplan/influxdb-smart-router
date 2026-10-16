@@ -46,21 +46,29 @@ node being replaced.
 
 ## Install with Helm
 
+The chart is published as a Helm repository, and every ISR release carries
+its chart as a release asset covered by the signed `SHA256SUMS.txt`.
+
 ```bash
-git clone https://github.com/M617263Kaplan/influxdb-smart-router.git
-cd influxdb-smart-router
+helm repo add isr https://m617263kaplan.github.io/influxdb-smart-router
+helm repo update
 
 kubectl create namespace isr
 # Encryption at rest is required. The key never enters a values file.
 kubectl -n isr create secret generic isr-encryption \
   --from-literal=key="$(openssl rand -base64 32)"
 
-helm install isr ./charts/isr -n isr \
+helm install isr isr/isr -n isr \
   --set image.tag=v4.0.16-arm64 \
   --set encryption.existingSecret=isr-encryption
 
 kubectl -n isr port-forward svc/isr 9800:9800
 ```
+
+`helm search repo isr --versions` lists every published chart with the ISR
+release it was built for. To install from a checkout instead, clone the
+repository and use `./charts/isr` in place of `isr/isr`; the chart at a
+release tag is the chart that release shipped.
 
 Open <http://localhost:9800>, create the first administrator, and run
 **Getting Started**. `image.tag` is required: it is the arch-suffixed tag you
