@@ -1,0 +1,6 @@
+<!doctype html><meta charset="utf-8"><title>ISR Helm repository</title>
+<pre>helm repo add isr https://m617263kaplan.github.io/influxdb-smart-router
+helm repo update
+helm install isr isr/isr -n isr --create-namespace \
+  --set encryption.existingSecret=isr-encryption</pre>
+<p>Charts point at the signed release assets on <a href="https://github.com/M617263Kaplan/influxdb-smart-router/releases">github.com/M617263Kaplan/influxdb-smart-router/releases</a>.</p>
