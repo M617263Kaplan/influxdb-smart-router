@@ -71,7 +71,7 @@ the card.
 | Condition | Alert |
 | :-- | :-- |
 | The store does not answer | Critical, until it does |
-| The store answers but reports itself not ready (it gives the reasons) | Warning |
+| The store answers but cannot take writes, for example after losing a drive (it gives the reasons) | Warning |
 | A drive is not healthy or is offline | Error |
 | A drive is 80% full | Warning |
 | A drive is 90% full, or will be full within a day at the current rate | Error |
