@@ -2,6 +2,20 @@ apiVersion: v1
 entries:
   isr:
   - apiVersion: v2
+    appVersion: v4.0.17
+    created: "2026-10-26T08:38:49.953819-07:00"
+    description: 'ISR — single-binary InfluxDB 3 Enterprise front door: proxy, cache,
+      in-process load balancer, and the ISR control plane + console. This chart deploys
+      the ISR control plane only; InfluxDB nodes, clusters and Traffic Lab agents
+      are then managed THROUGH the ISR API (ISR_ORCHESTRATOR=k8s drives kubectl with
+      this release''s ServiceAccount).'
+    digest: 9175470b316a1bc10c3815b1fc22ce3d48794e751ef615b7df3c423677385a80
+    name: isr
+    type: application
+    urls:
+    - https://github.com/M617263Kaplan/influxdb-smart-router/releases/download/v4.0.17/isr-0.2.34.tgz
+    version: 0.2.34
+  - apiVersion: v2
     appVersion: v4.0.16
     created: "2026-10-16T11:20:17.149415-07:00"
     description: 'ISR — single-binary InfluxDB 3 Enterprise front door: proxy, cache,
@@ -15,4 +29,4 @@ entries:
     urls:
     - https://github.com/M617263Kaplan/influxdb-smart-router/releases/download/v4.0.16/isr-0.2.33.tgz
     version: 0.2.33
-generated: "2026-10-16T11:20:17.147785-07:00"
+generated: "2026-10-26T08:38:49.952015-07:00"
