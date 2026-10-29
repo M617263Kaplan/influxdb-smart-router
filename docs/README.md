@@ -21,6 +21,7 @@ Every guide in this directory, by the question it answers. The console's own
 ## Getting data in
 
 - [Ingest Gateway](ingest-gateway.md) — Prometheus, OTLP, Datadog, Graphite, StatsD, collectd and Loki writers landing as line protocol.
+- [**Migrating into InfluxDB 3**](migration.md) — every route in and how to drive each one: a live 1.x/2.x source, line-protocol or Parquet files, a portable backup. Start here if you are moving existing data.
 - [Migration readiness — the dry run](migration-readiness.md) — what a migration will do before it does it.
 - [Migrating from an InfluxDB 1.x portable backup](backup-file-migration.md) — expanding a portable backup straight into InfluxDB 3.
 - [Importing a directory of line-protocol files](line-protocol-import.md) — a folder of `influx export` files discovered, imported as a tracked job, and verified by a row count on the target.
