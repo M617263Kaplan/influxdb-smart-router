@@ -45,3 +45,30 @@ spec:
       targetPort: statsd
       protocol: UDP
     {{- end }}
+{{- if .Values.appGateway.publish }}
+---
+# THE APPLICATION GATEWAY'S LISTENERS, 9460-9479, ONE TO ONE. A Service lists
+# ports individually, so the range is generated here; its first port and size
+# are ISR's `app_gateway::DEFAULT_PORT` and `GATEWAY_PORTS_LAST`, and a test
+# (tests/chart_gateway_range.rs) holds them equal. publishNotReadyAddresses for
+# the console's reason: the gateway relays to applications, not to clusters,
+# so a NotReady pod (no cluster yet) still serves it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "isr.fullname" . }}-gateway
+  labels:
+    {{- include "isr.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "isr.selectorLabels" . | nindent 4 }}
+  ports:
+    {{- range $i := until 20 }}
+    {{- $p := add 9460 $i }}
+    - name: gw-{{ $p }}
+      port: {{ $p }}
+      targetPort: {{ $p }}
+    {{- end }}
+{{- end }}

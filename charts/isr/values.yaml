@@ -1,9 +1,9 @@
 # Default values for the ISR control-plane chart.
 #
 # THE IMAGE IS NOT IN A REGISTRY. ISR images are distributed as release
-# tarballs (docker load) and tags are arch-suffixed: isr:v4.0.19-arm64,
-# isr:v4.0.19-amd64. Load the image into your cluster's runtime (e.g.
-# `kind load docker-image isr:v4.0.19-arm64`) or push it to a registry you
+# tarballs (docker load) and tags are arch-suffixed: isr:v4.0.20-arm64,
+# isr:v4.0.20-amd64. Load the image into your cluster's runtime (e.g.
+# `kind load docker-image isr:v4.0.20-arm64`) or push it to a registry you
 # control, then set image.repository/image.tag accordingly.
 image:
   repository: isr
@@ -117,6 +117,19 @@ advertise:
   # The externally reachable tool/agent port, when it differs from the
   # container's.
   toolPort: ""
+
+# ── APPLICATION GATEWAY ─────────────────────────────────────────────────────
+# ISR's application gateway (Operations → Applications → Application gateway)
+# runs a TLS listener inside this pod for each gateway row, and every listener a
+# launch creates takes its port from 9460-9479. ISR prints each listener's own
+# port (https://<advertise.host>:<port>), so the range is published ONE TO ONE
+# and is not configurable — a remapped port would make every address it prints
+# wrong. It gets a Service of its own, `<release>-gateway`, of `service.type`,
+# reachable while the pod is NotReady (like the console): the gateway relays to
+# applications, not to ISR's clusters. The installers publish the same range.
+appGateway:
+  # false publishes none: a gateway listener then answers only inside the pod.
+  publish: true
 
 # ── INGEST GATEWAY: StatsD over UDP ──────────────────────────────────────────
 # ISR_STATSD_LISTEN is read at STARTUP and the UDP port must be published, so
@@ -237,6 +250,32 @@ config:
           action: reject
           status_code: 7
           message: "FlightSQL SQL text rejected by ISR query policy"
+
+# Reporting to the ISR maintainers.
+#
+# Once a day ISR tells its maintainers that this deployment exists and roughly
+# how it is configured — a deployment id, the version and build, the platform,
+# and a few counts. It never sends your data, your database names, your tokens,
+# or your customers' identities. If it fails or is switched off, nothing about
+# how ISR runs changes.
+#
+# A Helm install cannot ask, so this value is where you answer. THREE STATES,
+# because ISR reads the environment before the console's own control and the
+# environment wins:
+#
+#   true    (the default) report. The console's control is overridden from
+#           here on.
+#   false   never report. The console's control is then DEAD — toggling it
+#           writes a setting ISR ignores.
+#   null    nothing is sent, and the console asks the first time somebody
+#           opens it. This is the only setting that leaves the console's
+#           control working, and nothing is rendered into the pod at all.
+#
+# Defaults to true (ruled 2026-10-31, D12): the posture is on-by-default with
+# disclosure, a Helm install is headless by definition, and this comment is the
+# disclosure — it is in the file an operator edits before installing.
+checkin:
+  enabled: true
 
 # Extra environment for the ISR container, verbatim entries
 # (e.g. - name: ISR_RUN_TARPIT

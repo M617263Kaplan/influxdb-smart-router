@@ -10,13 +10,13 @@ per cluster.
 ## The image
 
 ISR images are **not in a registry**. They are distributed as release
-tarballs and tagged per arch (`isr:v4.0.19-arm64` / `isr:v4.0.19-amd64`).
+tarballs and tagged per arch (`isr:v4.0.20-arm64` / `isr:v4.0.20-amd64`).
 Load one into your cluster runtime first — on Docker Desktop the node runs
 containerd, so the image has to be imported into it, not just into Docker:
 
 ```bash
-kind load docker-image isr:v4.0.19-arm64        # kind
-docker save isr:v4.0.19-arm64 | docker exec -i desktop-control-plane \
+kind load docker-image isr:v4.0.20-arm64        # kind
+docker save isr:v4.0.20-arm64 | docker exec -i desktop-control-plane \
   ctr -n k8s.io images import -                # Docker Desktop
 # or push to a registry you control and point image.repository at it
 ```
@@ -33,7 +33,7 @@ kubectl create secret generic isr-encryption \
   --from-literal=key="$(openssl rand -base64 32)"
 
 helm install isr ./charts/isr \
-  --set image.tag=v4.0.19-arm64 \
+  --set image.tag=v4.0.20-arm64 \
   --set encryption.existingSecret=isr-encryption
 kubectl port-forward svc/isr 9800:9800
 ```
@@ -79,6 +79,18 @@ terminate TLS in front, or:
   pod address is not where anything can reach it. These are what ISR hands out
   in connection strings, agent registrations and fleet callbacks; leave them
   empty and it advertises somewhere clients cannot go.
+
+## Application gateway listeners
+
+ISR's application gateway (Operations → Applications → *Application gateway*)
+runs a TLS listener inside the pod for each gateway row, and every listener a
+launch creates takes its port from **9460–9479**. The chart publishes that
+range one to one on a Service of its own, `<release>-gateway`, of
+`service.type`, reachable while the pod is NotReady like the console. ISR
+prints each listener as `https://<advertise.host>:<port>`, so set
+`advertise.host` to the name that reaches this Service. The range is fixed —
+ISR prints each listener's own port — and `appGateway.publish=false` publishes
+none.
 
 ## StatsD over UDP
 

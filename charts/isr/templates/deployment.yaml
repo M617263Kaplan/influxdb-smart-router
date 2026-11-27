@@ -70,6 +70,14 @@ spec:
             # (verified: auth can-i as uid 10001 says yes only with this set).
             - name: HOME
               value: /var/lib/isr
+            {{- if not (kindIs "invalid" .Values.checkin.enabled) }}
+            # Reporting to the maintainers; see `checkin` in values.yaml. Only
+            # rendered when the value is set, because an EMPTY ISR_CHECKIN is
+            # read as "no answer" rather than "off" — so rendering it always
+            # would make `false` and `null` arrive identically and silently.
+            - name: ISR_CHECKIN
+              value: {{ ternary "on" "off" .Values.checkin.enabled | quote }}
+            {{- end }}
             {{- if .Values.nodeManagement.enabled }}
             # The kubectl driver: node/cluster launches requested through the
             # ISR API become `kubectl apply` under this pod's ServiceAccount.

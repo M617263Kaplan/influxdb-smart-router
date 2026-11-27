@@ -18,6 +18,18 @@ storage behind it.
 
 Data plane (Ready pods only): svc/{{ include "isr.fullname" . }}-data, ports
 {{ .Values.service.dataV1Port }} (v1/v2) and {{ .Values.service.dataV3Port }} (v3).
+{{- if .Values.appGateway.publish }}
+
+Application gateway listeners (reachable while NotReady, like the console):
+svc/{{ include "isr.fullname" . }}-gateway, ports 9460-9479, one to one. ISR
+prints each listener as https://<advertise.host>:<port>; set advertise.host to
+the name that reaches this Service. With a ClusterIP Service, reach one with
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "isr.fullname" . }}-gateway 9460:9460
+{{- else }}
+
+Application gateway listeners are NOT published (appGateway.publish=false):
+they answer only inside the pod.
+{{- end }}
 
 {{- if .Values.nodeManagement.enabled }}
 
